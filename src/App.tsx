@@ -1,14 +1,14 @@
 import React, { useState } from "react";
-import { 
-  Search, 
-  Loader2, 
-  Code, 
-  Globe, 
-  Shield, 
-  Zap, 
-  ChevronRight, 
-  Terminal, 
-  Copy, 
+import {
+  Search,
+  Loader2,
+  Code,
+  Globe,
+  Shield,
+  Zap,
+  ChevronRight,
+  Terminal,
+  Copy,
   Check,
   Plus,
   Trash2,
@@ -40,7 +40,7 @@ import { extractStructuredData } from "./services/geminiService";
 
 type SchemaValue = string | number | boolean | SchemaObject | SchemaArray;
 interface SchemaObject { [key: string]: SchemaValue }
-interface SchemaArray extends Array<SchemaValue> {}
+interface SchemaArray extends Array<SchemaValue> { }
 
 interface SchemaVisualNodeProps {
   key?: React.Key;
@@ -50,11 +50,11 @@ interface SchemaVisualNodeProps {
   onUpdate: (newName: string, newValue: SchemaValue | null) => void;
 }
 
-const SchemaVisualNode = ({ 
-  name, 
-  value, 
-  depth = 0, 
-  onUpdate 
+const SchemaVisualNode = ({
+  name,
+  value,
+  depth = 0,
+  onUpdate
 }: SchemaVisualNodeProps) => {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -108,7 +108,7 @@ const SchemaVisualNode = ({
 
   return (
     <div className="group">
-      <div 
+      <div
         className="flex items-center gap-2 py-1.5 px-2 hover:bg-black/5 rounded transition-colors"
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
@@ -119,14 +119,14 @@ const SchemaVisualNode = ({
         ) : (
           <div className="w-4" />
         )}
-        
+
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <div className="p-1 bg-white border border-black/10 rounded shadow-sm">
             {getTypeIcon(type)}
           </div>
-          
+
           {name !== 'root' && name !== 'items' && (
-            <input 
+            <input
               value={name}
               onChange={(e) => onUpdate(e.target.value, value)}
               className="bg-transparent border-none focus:ring-0 p-0 text-[11px] font-mono font-bold w-24 truncate"
@@ -134,7 +134,7 @@ const SchemaVisualNode = ({
             />
           )}
 
-          <select 
+          <select
             value={type}
             onChange={(e) => handleTypeChange(e.target.value)}
             className="bg-transparent border-none focus:ring-0 p-0 text-[10px] font-mono opacity-40 uppercase cursor-pointer hover:opacity-100"
@@ -164,7 +164,7 @@ const SchemaVisualNode = ({
       {isOpen && type === 'object' && (
         <div className="border-l border-black/5 ml-4">
           {Object.entries(value as SchemaObject).map(([propName, propValue]) => (
-            <SchemaVisualNode 
+            <SchemaVisualNode
               key={propName}
               name={propName}
               value={propValue}
@@ -183,7 +183,7 @@ const SchemaVisualNode = ({
             />
           ))}
           <div style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }} className="py-1">
-            <button 
+            <button
               onClick={addField}
               className="flex items-center gap-1 text-[10px] font-mono opacity-40 hover:opacity-100 transition-opacity"
             >
@@ -196,7 +196,7 @@ const SchemaVisualNode = ({
       {isOpen && type === 'array' && (
         <div className="border-l border-black/5 ml-4">
           {(value as SchemaArray).map((item, idx) => (
-            <SchemaVisualNode 
+            <SchemaVisualNode
               key={idx}
               name={`[${idx}]`}
               value={item}
@@ -210,7 +210,7 @@ const SchemaVisualNode = ({
             />
           ))}
           <div style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }} className="py-1">
-            <button 
+            <button
               onClick={addField}
               className="flex items-center gap-1 text-[10px] font-mono opacity-40 hover:opacity-100 transition-opacity"
             >
@@ -223,11 +223,11 @@ const SchemaVisualNode = ({
   );
 };
 
-const SchemaVisualEditor = ({ 
-  schema, 
-  onChange 
-}: { 
-  schema: string; 
+const SchemaVisualEditor = ({
+  schema,
+  onChange
+}: {
+  schema: string;
   onChange: (newSchema: string) => void;
 }) => {
   let parsed: SchemaValue;
@@ -244,7 +244,7 @@ const SchemaVisualEditor = ({
   return (
     <div className="bg-white border border-black/10 rounded-sm overflow-auto max-h-[350px]">
       <div className="p-2">
-        <SchemaVisualNode 
+        <SchemaVisualNode
           name="root"
           value={parsed}
           onUpdate={(_, newValue) => {
@@ -313,7 +313,7 @@ const Dashboard = () => {
             </div>
             <p className="text-[10px] font-mono uppercase text-[#A1A1AA] mb-1">{stat.label}</p>
             <p className="text-2xl font-bold tracking-tight text-[#E4E3E0]">{stat.value}</p>
-            
+
             {/* Decorative background element */}
             <div className="absolute -right-4 -bottom-4 opacity-[0.02] group-hover:scale-110 transition-transform duration-500 text-white">
               <stat.icon size={100} />
@@ -331,7 +331,7 @@ const Dashboard = () => {
             </h3>
             <button className="text-[10px] font-mono uppercase text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors">View All</button>
           </div>
-          
+
           <div className="space-y-2">
             {recentActivity.map((item) => (
               <div key={item.id} className="bg-[#222222] border border-[#333333] rounded-lg p-4 flex items-center justify-between group hover:border-[#D95D39] transition-colors">
@@ -357,7 +357,7 @@ const Dashboard = () => {
               <Layers size={14} className="text-[#D95D39]" /> Node Distribution
             </h3>
           </div>
-          
+
           <div className="bg-[#222222] border border-[#333333] rounded-xl p-6 space-y-6">
             {[
               { region: 'US-EAST-1', load: 65, status: 'Optimal' },
@@ -370,7 +370,7 @@ const Dashboard = () => {
                   <p className={`text-[10px] font-mono uppercase ${node.load > 80 ? 'text-rose-500' : 'text-emerald-500'}`}>{node.status}</p>
                 </div>
                 <div className="h-2 bg-[#121212] rounded-full relative overflow-hidden border border-[#333333]">
-                  <motion.div 
+                  <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${node.load}%` }}
                     className={`absolute top-0 left-0 bottom-0 rounded-full ${node.load > 80 ? 'bg-rose-500' : 'bg-[#D95D39]'}`}
@@ -378,7 +378,7 @@ const Dashboard = () => {
                 </div>
               </div>
             ))}
-            
+
             <div className="pt-4 border-t border-[#333333]">
               <div className="flex items-center gap-3 p-3 bg-[#D95D39]/10 border border-[#D95D39]/30 rounded-lg">
                 <AlertCircle className="text-[#D95D39] shrink-0" size={16} />
@@ -407,19 +407,19 @@ export default function App() {
       }
     ]
   }, null, 2));
-  
+
   const [isScraping, setIsScraping] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [result, setResult] = useState<ScrapeResult | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  
+
   // New state for collapsible groups and raw output
   const [isResponseOpen, setIsResponseOpen] = useState(true);
   const [isRawOutputOpen, setIsRawOutputOpen] = useState(false);
   const [rawResponse, setRawResponse] = useState<any>(null);
-  
+
   // Left panel collapsible states
   const [isTargetConfigOpen, setIsTargetConfigOpen] = useState(true);
   const [isDevOptionsOpen, setIsDevOptionsOpen] = useState(true);
@@ -484,7 +484,7 @@ export default function App() {
         try {
           const currentSchema = JSON.parse(schema);
           const suggestedKey = (tagName || 'field').toLowerCase() + '_' + Math.floor(Math.random() * 1000);
-          
+
           if (typeof currentSchema === 'object' && currentSchema !== null && !Array.isArray(currentSchema)) {
             const newSchema = { ...currentSchema, [suggestedKey]: "string" };
             setSchema(JSON.stringify(newSchema, null, 2));
@@ -506,7 +506,7 @@ export default function App() {
     setExtractedData(null);
     setRawResponse(null);
     setWebhookStatus(null);
-    
+
     const runId = Math.random().toString(36).substring(7);
     addLog(`Starting scrape for ${url}`, 'info');
 
@@ -547,13 +547,13 @@ export default function App() {
       const contentToExtract = data.data.markdown || data.data.html || "";
       const size = contentToExtract.length;
       addLog(`Scrape successful. Content size: ${(size / 1024).toFixed(2)} KB`, 'success');
-      
+
       setIsExtracting(true);
       addLog(`Starting AI extraction using Gemini...`, 'info');
       const extracted = await extractStructuredData(contentToExtract, JSON.parse(schema));
       setExtractedData(extracted);
       addLog(`AI extraction complete.`, 'success');
-      
+
       setRunHistory(prev => [{
         id: runId,
         url,
@@ -561,12 +561,12 @@ export default function App() {
         timestamp: Date.now(),
         result: extracted
       }, ...prev]);
-      
+
       setActiveTab('data');
     } catch (err: any) {
       setError(err.message);
       addLog(`Error: ${err.message}`, 'error');
-      
+
       setRunHistory(prev => [{
         id: runId,
         url,
@@ -574,7 +574,7 @@ export default function App() {
         timestamp: Date.now(),
         error: err.message
       }, ...prev]);
-      
+
       if (!rawResponse) {
         setRawResponse(prev => prev || {
           status: 0,
@@ -601,7 +601,7 @@ export default function App() {
     setIsSendingWebhook(true);
     setWebhookStatus(null);
     addLog(`Sending data to webhook: ${webhookUrl}`, 'info');
-    
+
     try {
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -612,7 +612,7 @@ export default function App() {
           data: extractedData
         })
       });
-      
+
       if (response.ok) {
         setWebhookStatus('success');
         addLog(`Webhook sent successfully (${response.status})`, 'success');
@@ -632,6 +632,7 @@ export default function App() {
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'scrape', icon: Zap, label: 'Scrape' },
     { id: 'api', icon: Code2, label: 'API' },
+    { id: 'environment', icon: Globe, label: 'Environment' },
     { id: 'activity', icon: Activity, label: 'Activity' },
     { id: 'workbench', icon: Hammer, label: 'Workbench' },
     { id: 'settings', icon: Settings, label: 'Settings' },
@@ -664,7 +665,7 @@ export default function App() {
                   </div>
                   <span className="font-bold tracking-tight uppercase text-lg">QuarryMiner</span>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsSideMenuOpen(false)}
                   className="p-2 hover:bg-[#222222] rounded-full transition-colors text-[#A1A1AA] hover:text-[#E4E3E0]"
                 >
@@ -682,11 +683,10 @@ export default function App() {
                         setIsSideMenuOpen(false);
                       }
                     }}
-                    className={`w-full flex items-center gap-4 px-4 py-3 rounded-md transition-all group ${
-                      activePage === item.id 
-                        ? 'bg-[#222222] text-[#D95D39]' 
+                    className={`w-full flex items-center gap-4 px-4 py-3 rounded-md transition-all group ${activePage === item.id
+                        ? 'bg-[#222222] text-[#D95D39]'
                         : 'hover:bg-[#222222] text-[#A1A1AA] hover:text-[#E4E3E0]'
-                    }`}
+                      }`}
                   >
                     <item.icon size={18} className={activePage === item.id ? '' : 'group-hover:scale-110 transition-transform'} />
                     <span className="text-xs font-mono uppercase tracking-widest font-bold">{item.label}</span>
@@ -712,7 +712,7 @@ export default function App() {
 
       {/* Header */}
       <header className="border-b border-[#333333] p-6 flex justify-between items-center bg-[#121212]">
-        <div 
+        <div
           className="flex items-center gap-3 cursor-pointer group"
           onClick={() => setIsSideMenuOpen(true)}
         >
@@ -736,495 +736,494 @@ export default function App() {
         ) : (
           <>
             {/* Left Panel: Configuration */}
-            <div 
+            <div
               className="border-r border-[#333333] p-0 flex flex-col bg-[#121212] shrink-0 h-full"
               style={{ width: `${leftPanelWidth}px` }}
             >
-          <div className="flex-1 overflow-auto">
-            {/* Target Configuration Group */}
-            <section className="border-b border-[#333333]">
-              <button 
-                onClick={() => setIsTargetConfigOpen(!isTargetConfigOpen)}
-                className="w-full flex items-center justify-between p-4 bg-[#181818] hover:bg-[#222222] transition-colors border-b border-[#333333]"
-              >
-                <div className="flex items-center gap-2">
-                  <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isTargetConfigOpen ? 'rotate-90' : ''}`} size={14} />
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#E4E3E0]">Target Configuration</h3>
-                </div>
-              </button>
-              
-              <AnimatePresence initial={false}>
-                {isTargetConfigOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden bg-[#121212]"
+              <div className="flex-1 overflow-auto">
+                {/* Target Configuration Group */}
+                <section className="border-b border-[#333333]">
+                  <button
+                    onClick={() => setIsTargetConfigOpen(!isTargetConfigOpen)}
+                    className="w-full flex items-center justify-between p-4 bg-[#181818] hover:bg-[#222222] transition-colors border-b border-[#333333]"
                   >
-                    <div className="p-6 space-y-4">
-                      <div>
-                        <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Target URL</label>
-                        <div className="relative">
-                          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A1A1AA]" />
-                          <input
-                            type="text"
-                            value={url}
-                            onChange={(e) => setUrl(e.target.value)}
-                            className="w-full bg-[#181818] border border-[#333333] py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors"
-                            placeholder="https://example.com"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Wait Selector (Smart Wait)</label>
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A1A1AA]" />
-                          <input
-                            type="text"
-                            value={waitSelector}
-                            onChange={(e) => setWaitSelector(e.target.value)}
-                            className="w-full bg-[#181818] border border-[#333333] py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors"
-                            placeholder=".product-item"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Output Formats</label>
-                        <div className="flex flex-wrap gap-2">
-                          {["Markdown", "HTML", "JSON"].map((f) => (
-                            <button
-                              key={f}
-                              onClick={() => {
-                                setFormats(prev => 
-                                  prev.includes(f) 
-                                    ? prev.filter(item => item !== f) 
-                                    : [...prev, f]
-                                )
-                              }}
-                              className={`px-3 py-1.5 text-[10px] font-mono uppercase border transition-all rounded-md ${
-                                formats.includes(f) 
-                                  ? 'bg-gradient-to-r from-[#D95D39] to-[#E87A5D] border-transparent text-white shadow-md shadow-[#D95D39]/20' 
-                                  : 'bg-[#181818] border-[#333333] text-[#A1A1AA] hover:border-[#D95D39] hover:text-[#E4E3E0]'
-                              }`}
-                            >
-                              {f}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {formats.includes("JSON") && (
-                        <div className="pt-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-mono uppercase text-[#A1A1AA]">Extraction Schema</label>
-                            <div className="flex bg-[#181818] p-0.5 rounded-md border border-[#333333]">
-                              <button 
-                                onClick={() => setIsVisualSchema(false)}
-                                className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded-sm transition-all ${!isVisualSchema ? 'bg-[#333333] text-[#E4E3E0]' : 'text-[#A1A1AA] hover:text-[#E4E3E0]'}`}
-                              >
-                                JSON
-                              </button>
-                              <button 
-                                onClick={() => setIsVisualSchema(true)}
-                                className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded-sm transition-all ${isVisualSchema ? 'bg-[#333333] text-[#E4E3E0]' : 'text-[#A1A1AA] hover:text-[#E4E3E0]'}`}
-                              >
-                                Visual
-                              </button>
-                            </div>
-                          </div>
-                          <div className="relative h-[350px]">
-                            {isVisualSchema ? (
-                              <SchemaVisualEditor 
-                                schema={schema}
-                                onChange={setSchema}
-                              />
-                            ) : (
-                              <>
-                                <Code className="absolute right-3 top-3 w-4 h-4 text-[#A1A1AA] pointer-events-none" />
-                                <textarea
-                                  value={schema}
-                                  onChange={(e) => setSchema(e.target.value)}
-                                  className="w-full h-full bg-[#181818] border border-[#333333] p-4 text-xs font-mono focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md resize-none transition-colors"
-                                  spellCheck={false}
-                                />
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                    <div className="flex items-center gap-2">
+                      <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isTargetConfigOpen ? 'rotate-90' : ''}`} size={14} />
+                      <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#E4E3E0]">Target Configuration</h3>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </section>
+                  </button>
 
-            {/* Developer Options Group */}
-            <section className="border-b border-[#333333]">
-              <button 
-                onClick={() => setIsDevOptionsOpen(!isDevOptionsOpen)}
-                className="w-full flex items-center justify-between p-4 bg-[#181818] hover:bg-[#222222] transition-colors border-b border-[#333333]"
-              >
-                <div className="flex items-center gap-2">
-                  <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isDevOptionsOpen ? 'rotate-90' : ''}`} size={14} />
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#E4E3E0]">Developer Options</h3>
-                </div>
-              </button>
-              
-              <AnimatePresence initial={false}>
-                {isDevOptionsOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden bg-[#121212]"
-                  >
-                    <div className="p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Engine Version</span>
-                        <span className="text-[10px] font-mono uppercase text-[#E4E3E0]">v3.1-flash</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Stealth Mode</span>
-                        <span className="text-[10px] font-mono uppercase text-emerald-500">Enabled</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Retry Strategy</span>
-                        <span className="text-[10px] font-mono uppercase text-[#E4E3E0]">Exponential Backoff</span>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </section>
-          </div>
-
-          <div className="p-6 bg-[#121212]">
-            <button
-              onClick={handleScrape}
-              disabled={isScraping || isExtracting}
-              className="w-full bg-gradient-to-r from-[#D95D39] to-[#E87A5D] text-white py-4 font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-[#D95D39]/20 active:scale-[0.98] rounded-md"
-            >
-              {isScraping ? (
-                <>
-                  <Loader2 className="animate-spin" />
-                  Scraping...
-                </>
-              ) : isExtracting ? (
-                <>
-                  <Loader2 className="animate-spin" />
-                  Extracting...
-                </>
-              ) : (
-                <>
-                  <Zap size={18} />
-                  Scrape & Extract
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Resize Handle */}
-        <div
-          onMouseDown={startResizing}
-          className={`w-1 hover:w-1.5 bg-transparent cursor-col-resize transition-all hover:bg-[#D95D39] active:bg-[#D95D39] z-10 shrink-0 ${isResizing ? 'bg-[#D95D39] w-1.5' : ''}`}
-        />
-
-        {/* Right Panel: Output */}
-        <div className="flex-1 bg-[#181818] overflow-hidden flex flex-col">
-          <div className="border-b border-[#333333] flex bg-[#121212]">
-            <button 
-              onClick={() => setActiveTab('data')}
-              className={`px-6 py-4 text-[11px] font-bold uppercase tracking-wider border-r border-[#333333] transition-colors ${activeTab === 'data' ? 'bg-[#181818] text-[#D95D39] border-b-2 border-b-[#D95D39]' : 'text-[#A1A1AA] hover:bg-[#222222] hover:text-[#E4E3E0]'}`}
-            >
-              Extracted Data
-            </button>
-            <button 
-              onClick={() => setActiveTab('preview')}
-              className={`px-6 py-4 text-[11px] font-bold uppercase tracking-wider border-r border-[#333333] transition-colors ${activeTab === 'preview' ? 'bg-[#181818] text-[#D95D39] border-b-2 border-b-[#D95D39]' : 'text-[#A1A1AA] hover:bg-[#222222] hover:text-[#E4E3E0]'}`}
-            >
-              Live Preview
-            </button>
-            <button 
-              onClick={() => setActiveTab('history')}
-              className={`px-6 py-4 text-[11px] font-bold uppercase tracking-wider border-r border-[#333333] transition-colors ${activeTab === 'history' ? 'bg-[#181818] text-[#D95D39] border-b-2 border-b-[#D95D39]' : 'text-[#A1A1AA] hover:bg-[#222222] hover:text-[#E4E3E0]'}`}
-            >
-              Run History & Logs
-            </button>
-            <button 
-              onClick={() => setActiveTab('export')}
-              className={`px-6 py-4 text-[11px] font-bold uppercase tracking-wider border-r border-[#333333] transition-colors ${activeTab === 'export' ? 'bg-[#181818] text-[#D95D39] border-b-2 border-b-[#D95D39]' : 'text-[#A1A1AA] hover:bg-[#222222] hover:text-[#E4E3E0]'}`}
-            >
-              Export
-            </button>
-            
-            <div className="flex-1" />
-            
-            {extractedData && activeTab === 'data' && (
-              <button 
-                onClick={() => copyToClipboard(JSON.stringify(extractedData, null, 2))}
-                className="px-6 py-4 text-[10px] font-mono uppercase flex items-center gap-2 hover:bg-[#222222] text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors border-l border-[#333333]"
-              >
-                {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                {copied ? <span className="text-emerald-500">Copied</span> : 'Copy JSON'}
-              </button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-auto p-0 relative">
-            <AnimatePresence mode="wait">
-              {activeTab === 'data' && (
-                <motion.div
-                  key="data"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="p-8 h-full"
-                >
-                  {error && (
-                    <div className="space-y-4">
+                  <AnimatePresence initial={false}>
+                    {isTargetConfigOpen && (
                       <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-rose-500/10 border border-rose-500/20 p-4 text-rose-500 text-sm font-mono rounded-md"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden bg-[#121212]"
                       >
-                        [ERROR]: {error}
-                      </motion.div>
-                      
-                      {/* Show diagnostics on error too */}
-                      {!result && rawResponse && (
-                        <section className="border border-[#333333] overflow-hidden rounded-md">
-                          <button 
-                            onClick={() => setIsRawOutputOpen(!isRawOutputOpen)}
-                            className="w-full flex items-center justify-between p-4 bg-[#222222] hover:bg-[#333333] transition-colors"
-                          >
-                            <div className="flex items-center gap-2">
-                              <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isRawOutputOpen ? 'rotate-90' : ''}`} size={16} />
-                              <h3 className="text-sm font-bold uppercase tracking-wider text-[#E4E3E0]">Raw Output & Diagnostics</h3>
+                        <div className="p-6 space-y-4">
+                          <div>
+                            <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Target URL</label>
+                            <div className="relative">
+                              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A1A1AA]" />
+                              <input
+                                type="text"
+                                value={url}
+                                onChange={(e) => setUrl(e.target.value)}
+                                className="w-full bg-[#181818] border border-[#333333] py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors"
+                                placeholder="https://example.com"
+                              />
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${rawResponse.ok ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
-                                {rawResponse.ok ? 'SUCCESS' : 'FAILED'} {rawResponse.status}
-                              </span>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Wait Selector (Smart Wait)</label>
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A1A1AA]" />
+                              <input
+                                type="text"
+                                value={waitSelector}
+                                onChange={(e) => setWaitSelector(e.target.value)}
+                                className="w-full bg-[#181818] border border-[#333333] py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors"
+                                placeholder=".product-item"
+                              />
                             </div>
-                          </button>
-
-                          <AnimatePresence>
-                            {isRawOutputOpen && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="p-6 bg-[#181818] space-y-6">
-                                  <div>
-                                    <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Headers</label>
-                                    <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
-                                      <pre className="text-[10px] font-mono overflow-auto max-h-[150px] text-[#E4E3E0]">
-                                        {JSON.stringify(rawResponse.headers, null, 2)}
-                                      </pre>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Body</label>
-                                    <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
-                                      <pre className="text-[10px] font-mono overflow-auto max-h-[300px] text-[#E4E3E0]">
-                                        {typeof rawResponse.body === 'string' 
-                                          ? rawResponse.body.slice(0, 5000) + (rawResponse.body.length > 5000 ? '...' : '')
-                                          : JSON.stringify(rawResponse.body, null, 2)}
-                                      </pre>
-                                    </div>
-                                  </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Output Formats</label>
+                            <div className="flex flex-wrap gap-2">
+                              {["Markdown", "HTML", "JSON"].map((f) => (
+                                <button
+                                  key={f}
+                                  onClick={() => {
+                                    setFormats(prev =>
+                                      prev.includes(f)
+                                        ? prev.filter(item => item !== f)
+                                        : [...prev, f]
+                                    )
+                                  }}
+                                  className={`px-3 py-1.5 text-[10px] font-mono uppercase border transition-all rounded-md ${formats.includes(f)
+                                      ? 'bg-gradient-to-r from-[#D95D39] to-[#E87A5D] border-transparent text-white shadow-md shadow-[#D95D39]/20'
+                                      : 'bg-[#181818] border-[#333333] text-[#A1A1AA] hover:border-[#D95D39] hover:text-[#E4E3E0]'
+                                    }`}
+                                >
+                                  {f}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {formats.includes("JSON") && (
+                            <div className="pt-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[10px] font-mono uppercase text-[#A1A1AA]">Extraction Schema</label>
+                                <div className="flex bg-[#181818] p-0.5 rounded-md border border-[#333333]">
+                                  <button
+                                    onClick={() => setIsVisualSchema(false)}
+                                    className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded-sm transition-all ${!isVisualSchema ? 'bg-[#333333] text-[#E4E3E0]' : 'text-[#A1A1AA] hover:text-[#E4E3E0]'}`}
+                                  >
+                                    JSON
+                                  </button>
+                                  <button
+                                    onClick={() => setIsVisualSchema(true)}
+                                    className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded-sm transition-all ${isVisualSchema ? 'bg-[#333333] text-[#E4E3E0]' : 'text-[#A1A1AA] hover:text-[#E4E3E0]'}`}
+                                  >
+                                    Visual
+                                  </button>
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </section>
-                      )}
-                    </div>
-                  )}
+                              </div>
+                              <div className="relative h-[350px]">
+                                {isVisualSchema ? (
+                                  <SchemaVisualEditor
+                                    schema={schema}
+                                    onChange={setSchema}
+                                  />
+                                ) : (
+                                  <>
+                                    <Code className="absolute right-3 top-3 w-4 h-4 text-[#A1A1AA] pointer-events-none" />
+                                    <textarea
+                                      value={schema}
+                                      onChange={(e) => setSchema(e.target.value)}
+                                      className="w-full h-full bg-[#181818] border border-[#333333] p-4 text-xs font-mono focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md resize-none transition-colors"
+                                      spellCheck={false}
+                                    />
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </section>
 
-                  {!result && !isScraping && !error && (
-                    <div className="h-full flex flex-col items-center justify-center opacity-20">
-                      <Terminal size={64} strokeWidth={1} className="text-[#E4E3E0]" />
-                      <p className="mt-4 font-mono text-sm uppercase tracking-widest text-center text-[#E4E3E0]">
-                        Awaiting target URL...<br/>
-                        Engine ready for deployment.
-                      </p>
+                {/* Developer Options Group */}
+                <section className="border-b border-[#333333]">
+                  <button
+                    onClick={() => setIsDevOptionsOpen(!isDevOptionsOpen)}
+                    className="w-full flex items-center justify-between p-4 bg-[#181818] hover:bg-[#222222] transition-colors border-b border-[#333333]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isDevOptionsOpen ? 'rotate-90' : ''}`} size={14} />
+                      <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#E4E3E0]">Developer Options</h3>
                     </div>
-                  )}
+                  </button>
 
-                  {isScraping && (
-                    <div className="h-full flex flex-col items-center justify-center">
-                      <Loader2 className="animate-spin w-12 h-12 mb-4 text-[#D95D39] opacity-50" />
-                      <div className="space-y-2 text-center text-[#E4E3E0]">
-                        <p className="font-mono text-xs uppercase animate-pulse">Initializing Stealth Browser...</p>
-                        <p className="font-mono text-[10px] text-[#A1A1AA] uppercase">Rotating Fingerprints & User-Agents...</p>
-                      </div>
-                    </div>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {isDevOptionsOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden bg-[#121212]"
+                      >
+                        <div className="p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Engine Version</span>
+                            <span className="text-[10px] font-mono uppercase text-[#E4E3E0]">v3.1-flash</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Stealth Mode</span>
+                            <span className="text-[10px] font-mono uppercase text-emerald-500">Enabled</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Retry Strategy</span>
+                            <span className="text-[10px] font-mono uppercase text-[#E4E3E0]">Exponential Backoff</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </section>
+              </div>
 
-                  {result && (
+              <div className="p-6 bg-[#121212]">
+                <button
+                  onClick={handleScrape}
+                  disabled={isScraping || isExtracting}
+                  className="w-full bg-gradient-to-r from-[#D95D39] to-[#E87A5D] text-white py-4 font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-[#D95D39]/20 active:scale-[0.98] rounded-md"
+                >
+                  {isScraping ? (
+                    <>
+                      <Loader2 className="animate-spin" />
+                      Scraping...
+                    </>
+                  ) : isExtracting ? (
+                    <>
+                      <Loader2 className="animate-spin" />
+                      Extracting...
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={18} />
+                      Scrape & Extract
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Resize Handle */}
+            <div
+              onMouseDown={startResizing}
+              className={`w-1 hover:w-1.5 bg-transparent cursor-col-resize transition-all hover:bg-[#D95D39] active:bg-[#D95D39] z-10 shrink-0 ${isResizing ? 'bg-[#D95D39] w-1.5' : ''}`}
+            />
+
+            {/* Right Panel: Output */}
+            <div className="flex-1 bg-[#181818] overflow-hidden flex flex-col">
+              <div className="border-b border-[#333333] flex bg-[#121212]">
+                <button
+                  onClick={() => setActiveTab('data')}
+                  className={`px-6 py-4 text-[11px] font-bold uppercase tracking-wider border-r border-[#333333] transition-colors ${activeTab === 'data' ? 'bg-[#181818] text-[#D95D39] border-b-2 border-b-[#D95D39]' : 'text-[#A1A1AA] hover:bg-[#222222] hover:text-[#E4E3E0]'}`}
+                >
+                  Extracted Data
+                </button>
+                <button
+                  onClick={() => setActiveTab('preview')}
+                  className={`px-6 py-4 text-[11px] font-bold uppercase tracking-wider border-r border-[#333333] transition-colors ${activeTab === 'preview' ? 'bg-[#181818] text-[#D95D39] border-b-2 border-b-[#D95D39]' : 'text-[#A1A1AA] hover:bg-[#222222] hover:text-[#E4E3E0]'}`}
+                >
+                  Live Preview
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`px-6 py-4 text-[11px] font-bold uppercase tracking-wider border-r border-[#333333] transition-colors ${activeTab === 'history' ? 'bg-[#181818] text-[#D95D39] border-b-2 border-b-[#D95D39]' : 'text-[#A1A1AA] hover:bg-[#222222] hover:text-[#E4E3E0]'}`}
+                >
+                  Run History & Logs
+                </button>
+                <button
+                  onClick={() => setActiveTab('export')}
+                  className={`px-6 py-4 text-[11px] font-bold uppercase tracking-wider border-r border-[#333333] transition-colors ${activeTab === 'export' ? 'bg-[#181818] text-[#D95D39] border-b-2 border-b-[#D95D39]' : 'text-[#A1A1AA] hover:bg-[#222222] hover:text-[#E4E3E0]'}`}
+                >
+                  Export
+                </button>
+
+                <div className="flex-1" />
+
+                {extractedData && activeTab === 'data' && (
+                  <button
+                    onClick={() => copyToClipboard(JSON.stringify(extractedData, null, 2))}
+                    className="px-6 py-4 text-[10px] font-mono uppercase flex items-center gap-2 hover:bg-[#222222] text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors border-l border-[#333333]"
+                  >
+                    {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                    {copied ? <span className="text-emerald-500">Copied</span> : 'Copy JSON'}
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-auto p-0 relative">
+                <AnimatePresence mode="wait">
+                  {activeTab === 'data' && (
                     <motion.div
+                      key="data"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="space-y-6"
+                      exit={{ opacity: 0 }}
+                      className="p-8 h-full"
                     >
-                      {/* Collapsible Response Group */}
-                      <section className="border border-[#333333] overflow-hidden rounded-md">
-                        <button 
-                          onClick={() => setIsResponseOpen(!isResponseOpen)}
-                          className="w-full flex items-center justify-between p-4 bg-[#222222] hover:bg-[#333333] transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isResponseOpen ? 'rotate-90' : ''}`} size={16} />
-                            <h3 className="text-sm font-bold uppercase tracking-wider text-[#E4E3E0]">AI Extracted Data</h3>
-                          </div>
-                          <span className="text-[10px] font-mono text-[#A1A1AA] uppercase">
-                            {isExtracting ? 'Extracting...' : 'Complete'}
-                          </span>
-                        </button>
-                        
-                        <AnimatePresence>
-                          {isResponseOpen && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="p-6 bg-[#181818]">
-                                {isExtracting ? (
-                                  <div className="flex flex-col items-center justify-center py-8 bg-[#121212] border border-dashed border-[#333333] rounded-md">
-                                    <Loader2 className="animate-spin w-8 h-8 mb-4 text-[#D95D39] opacity-50" />
-                                    <p className="font-mono text-[10px] uppercase text-[#A1A1AA]">Gemini 3.1 analyzing DOM structure...</p>
-                                  </div>
-                                ) : extractedData ? (
-                                  <div className="bg-[#121212] text-[#E4E3E0] p-6 rounded-md border border-[#333333]">
-                                    <pre className="text-xs font-mono overflow-auto max-h-[500px] scrollbar-hide">
-                                      {JSON.stringify(extractedData, null, 2)}
-                                    </pre>
-                                  </div>
-                                ) : (
-                                  <p className="text-xs font-mono text-[#A1A1AA] italic">No data extracted.</p>
-                                )}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </section>
+                      {error && (
+                        <div className="space-y-4">
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-rose-500/10 border border-rose-500/20 p-4 text-rose-500 text-sm font-mono rounded-md"
+                          >
+                            [ERROR]: {error}
+                          </motion.div>
 
-                      {/* Collapsible Raw Output Group */}
-                      <section className="border border-[#333333] overflow-hidden rounded-md">
-                        <button 
-                          onClick={() => setIsRawOutputOpen(!isRawOutputOpen)}
-                          className="w-full flex items-center justify-between p-4 bg-[#222222] hover:bg-[#333333] transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isRawOutputOpen ? 'rotate-90' : ''}`} size={16} />
-                            <h3 className="text-sm font-bold uppercase tracking-wider text-[#E4E3E0]">Raw Output & Diagnostics</h3>
+                          {/* Show diagnostics on error too */}
+                          {!result && rawResponse && (
+                            <section className="border border-[#333333] overflow-hidden rounded-md">
+                              <button
+                                onClick={() => setIsRawOutputOpen(!isRawOutputOpen)}
+                                className="w-full flex items-center justify-between p-4 bg-[#222222] hover:bg-[#333333] transition-colors"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isRawOutputOpen ? 'rotate-90' : ''}`} size={16} />
+                                  <h3 className="text-sm font-bold uppercase tracking-wider text-[#E4E3E0]">Raw Output & Diagnostics</h3>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${rawResponse.ok ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
+                                    {rawResponse.ok ? 'SUCCESS' : 'FAILED'} {rawResponse.status}
+                                  </span>
+                                </div>
+                              </button>
+
+                              <AnimatePresence>
+                                {isRawOutputOpen && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="p-6 bg-[#181818] space-y-6">
+                                      <div>
+                                        <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Headers</label>
+                                        <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
+                                          <pre className="text-[10px] font-mono overflow-auto max-h-[150px] text-[#E4E3E0]">
+                                            {JSON.stringify(rawResponse.headers, null, 2)}
+                                          </pre>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Body</label>
+                                        <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
+                                          <pre className="text-[10px] font-mono overflow-auto max-h-[300px] text-[#E4E3E0]">
+                                            {typeof rawResponse.body === 'string'
+                                              ? rawResponse.body.slice(0, 5000) + (rawResponse.body.length > 5000 ? '...' : '')
+                                              : JSON.stringify(rawResponse.body, null, 2)}
+                                          </pre>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </section>
+                          )}
+                        </div>
+                      )}
+
+                      {!result && !isScraping && !error && (
+                        <div className="h-full flex flex-col items-center justify-center opacity-20">
+                          <Terminal size={64} strokeWidth={1} className="text-[#E4E3E0]" />
+                          <p className="mt-4 font-mono text-sm uppercase tracking-widest text-center text-[#E4E3E0]">
+                            Awaiting target URL...<br />
+                            Engine ready for deployment.
+                          </p>
+                        </div>
+                      )}
+
+                      {isScraping && (
+                        <div className="h-full flex flex-col items-center justify-center">
+                          <Loader2 className="animate-spin w-12 h-12 mb-4 text-[#D95D39] opacity-50" />
+                          <div className="space-y-2 text-center text-[#E4E3E0]">
+                            <p className="font-mono text-xs uppercase animate-pulse">Initializing Stealth Browser...</p>
+                            <p className="font-mono text-[10px] text-[#A1A1AA] uppercase">Rotating Fingerprints & User-Agents...</p>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {rawResponse && (
-                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${rawResponse.ok ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
-                                {rawResponse.ok ? 'SUCCESS' : 'FAILED'} {rawResponse.status}
+                        </div>
+                      )}
+
+                      {result && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="space-y-6"
+                        >
+                          {/* Collapsible Response Group */}
+                          <section className="border border-[#333333] overflow-hidden rounded-md">
+                            <button
+                              onClick={() => setIsResponseOpen(!isResponseOpen)}
+                              className="w-full flex items-center justify-between p-4 bg-[#222222] hover:bg-[#333333] transition-colors"
+                            >
+                              <div className="flex items-center gap-2">
+                                <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isResponseOpen ? 'rotate-90' : ''}`} size={16} />
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-[#E4E3E0]">AI Extracted Data</h3>
+                              </div>
+                              <span className="text-[10px] font-mono text-[#A1A1AA] uppercase">
+                                {isExtracting ? 'Extracting...' : 'Complete'}
                               </span>
-                            )}
-                          </div>
-                        </button>
+                            </button>
 
-                        <AnimatePresence>
-                          {isRawOutputOpen && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
+                            <AnimatePresence>
+                              {isResponseOpen && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="p-6 bg-[#181818]">
+                                    {isExtracting ? (
+                                      <div className="flex flex-col items-center justify-center py-8 bg-[#121212] border border-dashed border-[#333333] rounded-md">
+                                        <Loader2 className="animate-spin w-8 h-8 mb-4 text-[#D95D39] opacity-50" />
+                                        <p className="font-mono text-[10px] uppercase text-[#A1A1AA]">Gemini 3.1 analyzing DOM structure...</p>
+                                      </div>
+                                    ) : extractedData ? (
+                                      <div className="bg-[#121212] text-[#E4E3E0] p-6 rounded-md border border-[#333333]">
+                                        <pre className="text-xs font-mono overflow-auto max-h-[500px] scrollbar-hide">
+                                          {JSON.stringify(extractedData, null, 2)}
+                                        </pre>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs font-mono text-[#A1A1AA] italic">No data extracted.</p>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </section>
+
+                          {/* Collapsible Raw Output Group */}
+                          <section className="border border-[#333333] overflow-hidden rounded-md">
+                            <button
+                              onClick={() => setIsRawOutputOpen(!isRawOutputOpen)}
+                              className="w-full flex items-center justify-between p-4 bg-[#222222] hover:bg-[#333333] transition-colors"
                             >
-                              <div className="p-6 bg-[#181818] space-y-6">
-                                {rawResponse ? (
-                                  <>
-                                    <div>
-                                      <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Headers</label>
-                                      <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
-                                        <pre className="text-[10px] font-mono overflow-auto max-h-[150px] text-[#E4E3E0]">
-                                          {JSON.stringify(rawResponse.headers, null, 2)}
-                                        </pre>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Body</label>
-                                      <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
-                                        <pre className="text-[10px] font-mono overflow-auto max-h-[300px] text-[#E4E3E0]">
-                                          {typeof rawResponse.body === 'string' 
-                                            ? rawResponse.body.slice(0, 5000) + (rawResponse.body.length > 5000 ? '...' : '')
-                                            : JSON.stringify(rawResponse.body, null, 2)}
-                                        </pre>
-                                      </div>
-                                    </div>
-                                    {result?.markdown && (
-                                      <div>
-                                        <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Markdown Content</label>
-                                        <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
-                                          <pre className="text-[10px] font-mono overflow-auto max-h-[300px] whitespace-pre-wrap text-[#E4E3E0]">
-                                            {result.markdown}
-                                          </pre>
-                                        </div>
-                                      </div>
-                                    )}
-                                    {result?.json && Array.isArray(result.json) && result.json.length > 0 && (
-                                      <div>
-                                        <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Intercepted JSON API Responses ({result.json.length})</label>
-                                        <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
-                                          <pre className="text-[10px] font-mono overflow-auto max-h-[400px] text-[#E4E3E0]">
-                                            {JSON.stringify(result.json, null, 2)}
-                                          </pre>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </>
-                                ) : (
-                                  <p className="text-xs font-mono text-[#A1A1AA] italic">No diagnostic data available.</p>
+                              <div className="flex items-center gap-2">
+                                <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isRawOutputOpen ? 'rotate-90' : ''}`} size={16} />
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-[#E4E3E0]">Raw Output & Diagnostics</h3>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {rawResponse && (
+                                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${rawResponse.ok ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
+                                    {rawResponse.ok ? 'SUCCESS' : 'FAILED'} {rawResponse.status}
+                                  </span>
                                 )}
                               </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </section>
+                            </button>
 
-                      {/* Metadata Section */}
-                      <section className="grid grid-cols-2 gap-4">
-                        <div className="border border-[#333333] p-4 bg-[#222222] rounded-md">
-                          <label className="text-[9px] font-mono uppercase text-[#A1A1AA] block mb-1">Page Title</label>
-                          <p className="text-sm font-medium truncate text-[#E4E3E0]">{result.title}</p>
-                        </div>
-                        <div className="border border-[#333333] p-4 bg-[#222222] rounded-md">
-                          <label className="text-[9px] font-mono uppercase text-[#A1A1AA] block mb-1">Source URL</label>
-                          <p className="text-sm font-medium truncate text-[#E4E3E0]">{result.url}</p>
-                        </div>
-                      </section>
+                            <AnimatePresence>
+                              {isRawOutputOpen && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="p-6 bg-[#181818] space-y-6">
+                                    {rawResponse ? (
+                                      <>
+                                        <div>
+                                          <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Headers</label>
+                                          <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
+                                            <pre className="text-[10px] font-mono overflow-auto max-h-[150px] text-[#E4E3E0]">
+                                              {JSON.stringify(rawResponse.headers, null, 2)}
+                                            </pre>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Body</label>
+                                          <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
+                                            <pre className="text-[10px] font-mono overflow-auto max-h-[300px] text-[#E4E3E0]">
+                                              {typeof rawResponse.body === 'string'
+                                                ? rawResponse.body.slice(0, 5000) + (rawResponse.body.length > 5000 ? '...' : '')
+                                                : JSON.stringify(rawResponse.body, null, 2)}
+                                            </pre>
+                                          </div>
+                                        </div>
+                                        {result?.markdown && (
+                                          <div>
+                                            <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Markdown Content</label>
+                                            <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
+                                              <pre className="text-[10px] font-mono overflow-auto max-h-[300px] whitespace-pre-wrap text-[#E4E3E0]">
+                                                {result.markdown}
+                                              </pre>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {result?.json && Array.isArray(result.json) && result.json.length > 0 && (
+                                          <div>
+                                            <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Intercepted JSON API Responses ({result.json.length})</label>
+                                            <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
+                                              <pre className="text-[10px] font-mono overflow-auto max-h-[400px] text-[#E4E3E0]">
+                                                {JSON.stringify(result.json, null, 2)}
+                                              </pre>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <p className="text-xs font-mono text-[#A1A1AA] italic">No diagnostic data available.</p>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </section>
+
+                          {/* Metadata Section */}
+                          <section className="grid grid-cols-2 gap-4">
+                            <div className="border border-[#333333] p-4 bg-[#222222] rounded-md">
+                              <label className="text-[9px] font-mono uppercase text-[#A1A1AA] block mb-1">Page Title</label>
+                              <p className="text-sm font-medium truncate text-[#E4E3E0]">{result.title}</p>
+                            </div>
+                            <div className="border border-[#333333] p-4 bg-[#222222] rounded-md">
+                              <label className="text-[9px] font-mono uppercase text-[#A1A1AA] block mb-1">Source URL</label>
+                              <p className="text-sm font-medium truncate text-[#E4E3E0]">{result.url}</p>
+                            </div>
+                          </section>
+                        </motion.div>
+                      )}
                     </motion.div>
                   )}
-                </motion.div>
-              )}
 
-              {activeTab === 'preview' && (
-                <motion.div
-                  key="preview"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="h-full flex flex-col"
-                >
-                  <div className="p-4 border-b border-[#141414] bg-[#F5F5F3]">
-                    <p className="text-xs font-mono">
-                      Click elements in the preview to automatically add them to your extraction schema.
-                    </p>
-                  </div>
-                  <div className="flex-1 relative bg-white">
-                    {result ? (
-                      <iframe 
-                        srcDoc={`
+                  {activeTab === 'preview' && (
+                    <motion.div
+                      key="preview"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="h-full flex flex-col"
+                    >
+                      <div className="p-4 border-b border-[#141414] bg-[#F5F5F3]">
+                        <p className="text-xs font-mono">
+                          Click elements in the preview to automatically add them to your extraction schema.
+                        </p>
+                      </div>
+                      <div className="flex-1 relative bg-white">
+                        {result ? (
+                          <iframe
+                            srcDoc={`
                           <html>
                             <head>
                               <base href="${result.url}">
@@ -1251,144 +1250,144 @@ export default function App() {
                             </body>
                           </html>
                         `}
-                        className="w-full h-full border-none"
-                        title="Live Preview"
-                        sandbox="allow-same-origin allow-scripts"
-                      />
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center opacity-20">
-                        <Globe size={64} strokeWidth={1} />
-                        <p className="mt-4 font-mono text-sm uppercase tracking-widest text-center">
-                          No preview available.<br/>
-                          Run a scrape first.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'history' && (
-                <motion.div
-                  key="history"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="p-8 h-full flex flex-col gap-8"
-                >
-                  <section>
-                    <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-[#E4E3E0]">Run History</h3>
-                    <div className="border border-[#333333] bg-[#121212] divide-y divide-[#333333] rounded-md overflow-hidden">
-                      {runHistory.length === 0 ? (
-                        <div className="p-8 text-center text-[#A1A1AA] font-mono text-xs">No runs yet.</div>
-                      ) : (
-                        runHistory.map((run) => (
-                          <div key={run.id} className="p-4 flex items-center justify-between hover:bg-[#222222] transition-colors">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-2 h-2 rounded-full ${run.status === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                              <div>
-                                <div className="text-sm font-medium truncate max-w-[300px] text-[#E4E3E0]">{run.url}</div>
-                                <div className="text-[10px] font-mono text-[#A1A1AA]">{new Date(run.timestamp).toLocaleString()}</div>
-                              </div>
-                            </div>
-                            <div className="text-[10px] font-mono uppercase">
-                              {run.status === 'success' ? (
-                                <span className="text-emerald-500">Success</span>
-                              ) : (
-                                <span className="text-rose-500">Failed</span>
-                              )}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </section>
-
-                  <section className="flex-1 flex flex-col min-h-0">
-                    <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-[#E4E3E0]">System Logs</h3>
-                    <div className="flex-1 border border-[#333333] bg-[#121212] text-[#E4E3E0] p-4 overflow-auto font-mono text-xs rounded-md">
-                      {logs.length === 0 ? (
-                        <div className="text-[#A1A1AA]">Waiting for events...</div>
-                      ) : (
-                        logs.map((log, i) => (
-                          <div key={i} className="mb-2 flex gap-4">
-                            <span className="text-[#A1A1AA] shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                            <span className={`${log.type === 'error' ? 'text-rose-500' : log.type === 'success' ? 'text-emerald-500' : 'text-blue-400'}`}>
-                              {log.message}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </section>
-                </motion.div>
-              )}
-
-              {activeTab === 'export' && (
-                <motion.div
-                  key="export"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="p-8 h-full"
-                >
-                  <div className="max-w-2xl mx-auto space-y-8">
-                    <section className="border border-[#333333] bg-[#121212] p-6 rounded-md">
-                      <h3 className="text-sm font-bold uppercase tracking-wider mb-2 text-[#E4E3E0]">Webhook Destination</h3>
-                      <p className="text-xs font-mono text-[#A1A1AA] mb-6">Send extracted JSON data automatically to your server or automation tool (e.g., Zapier, Make).</p>
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Endpoint URL</label>
-                          <input
-                            type="text"
-                            value={webhookUrl}
-                            onChange={(e) => setWebhookUrl(e.target.value)}
-                            className="w-full bg-[#181818] border border-[#333333] p-3 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors"
-                            placeholder="https://hooks.zapier.com/..."
+                            className="w-full h-full border-none"
+                            title="Live Preview"
+                            sandbox="allow-same-origin allow-scripts"
                           />
-                        </div>
-                        
-                        <button
-                          onClick={sendToWebhook}
-                          disabled={!webhookUrl || !extractedData || isSendingWebhook}
-                          className="bg-gradient-to-r from-[#D95D39] to-[#E87A5D] text-white px-6 py-3 font-bold uppercase tracking-wider text-xs hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2 w-full rounded-md shadow-lg shadow-[#D95D39]/20"
-                        >
-                          {isSendingWebhook ? <Loader2 className="animate-spin w-4 h-4" /> : <Zap className="w-4 h-4" />}
-                          {isSendingWebhook ? 'Sending...' : 'Test Webhook'}
-                        </button>
-                        
-                        {webhookStatus && (
-                          <div className={`p-3 text-xs font-mono border rounded-md ${webhookStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-rose-500/10 border-rose-500/20 text-rose-500'}`}>
-                            Status: {webhookStatus}
+                        ) : (
+                          <div className="h-full flex flex-col items-center justify-center opacity-20">
+                            <Globe size={64} strokeWidth={1} />
+                            <p className="mt-4 font-mono text-sm uppercase tracking-widest text-center">
+                              No preview available.<br />
+                              Run a scrape first.
+                            </p>
                           </div>
                         )}
                       </div>
-                    </section>
-                    
-                    <section className="border border-[#333333] bg-[#121212] p-6 rounded-md">
-                      <h3 className="text-sm font-bold uppercase tracking-wider mb-2 text-[#E4E3E0]">Payload Preview</h3>
-                      <p className="text-xs font-mono text-[#A1A1AA] mb-4">This is the exact JSON structure that will be sent via POST request.</p>
-                      
-                      <div className="bg-[#181818] text-[#E4E3E0] p-4 overflow-auto max-h-[300px] border border-[#333333] rounded-md">
-                        <pre className="text-[10px] font-mono">
-                          {JSON.stringify({
-                            url: result?.url || "https://example.com",
-                            timestamp: new Date().toISOString(),
-                            data: extractedData || { example: "Run a scrape to see real data" }
-                          }, null, 2)}
-                        </pre>
+                    </motion.div>
+                  )}
+
+                  {activeTab === 'history' && (
+                    <motion.div
+                      key="history"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="p-8 h-full flex flex-col gap-8"
+                    >
+                      <section>
+                        <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-[#E4E3E0]">Run History</h3>
+                        <div className="border border-[#333333] bg-[#121212] divide-y divide-[#333333] rounded-md overflow-hidden">
+                          {runHistory.length === 0 ? (
+                            <div className="p-8 text-center text-[#A1A1AA] font-mono text-xs">No runs yet.</div>
+                          ) : (
+                            runHistory.map((run) => (
+                              <div key={run.id} className="p-4 flex items-center justify-between hover:bg-[#222222] transition-colors">
+                                <div className="flex items-center gap-4">
+                                  <div className={`w-2 h-2 rounded-full ${run.status === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                  <div>
+                                    <div className="text-sm font-medium truncate max-w-[300px] text-[#E4E3E0]">{run.url}</div>
+                                    <div className="text-[10px] font-mono text-[#A1A1AA]">{new Date(run.timestamp).toLocaleString()}</div>
+                                  </div>
+                                </div>
+                                <div className="text-[10px] font-mono uppercase">
+                                  {run.status === 'success' ? (
+                                    <span className="text-emerald-500">Success</span>
+                                  ) : (
+                                    <span className="text-rose-500">Failed</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </section>
+
+                      <section className="flex-1 flex flex-col min-h-0">
+                        <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-[#E4E3E0]">System Logs</h3>
+                        <div className="flex-1 border border-[#333333] bg-[#121212] text-[#E4E3E0] p-4 overflow-auto font-mono text-xs rounded-md">
+                          {logs.length === 0 ? (
+                            <div className="text-[#A1A1AA]">Waiting for events...</div>
+                          ) : (
+                            logs.map((log, i) => (
+                              <div key={i} className="mb-2 flex gap-4">
+                                <span className="text-[#A1A1AA] shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                <span className={`${log.type === 'error' ? 'text-rose-500' : log.type === 'success' ? 'text-emerald-500' : 'text-blue-400'}`}>
+                                  {log.message}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </section>
+                    </motion.div>
+                  )}
+
+                  {activeTab === 'export' && (
+                    <motion.div
+                      key="export"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="p-8 h-full"
+                    >
+                      <div className="max-w-2xl mx-auto space-y-8">
+                        <section className="border border-[#333333] bg-[#121212] p-6 rounded-md">
+                          <h3 className="text-sm font-bold uppercase tracking-wider mb-2 text-[#E4E3E0]">Webhook Destination</h3>
+                          <p className="text-xs font-mono text-[#A1A1AA] mb-6">Send extracted JSON data automatically to your server or automation tool (e.g., Zapier, Make).</p>
+
+                          <div className="space-y-4">
+                            <div>
+                              <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Endpoint URL</label>
+                              <input
+                                type="text"
+                                value={webhookUrl}
+                                onChange={(e) => setWebhookUrl(e.target.value)}
+                                className="w-full bg-[#181818] border border-[#333333] p-3 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors"
+                                placeholder="https://hooks.zapier.com/..."
+                              />
+                            </div>
+
+                            <button
+                              onClick={sendToWebhook}
+                              disabled={!webhookUrl || !extractedData || isSendingWebhook}
+                              className="bg-gradient-to-r from-[#D95D39] to-[#E87A5D] text-white px-6 py-3 font-bold uppercase tracking-wider text-xs hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2 w-full rounded-md shadow-lg shadow-[#D95D39]/20"
+                            >
+                              {isSendingWebhook ? <Loader2 className="animate-spin w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                              {isSendingWebhook ? 'Sending...' : 'Test Webhook'}
+                            </button>
+
+                            {webhookStatus && (
+                              <div className={`p-3 text-xs font-mono border rounded-md ${webhookStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-rose-500/10 border-rose-500/20 text-rose-500'}`}>
+                                Status: {webhookStatus}
+                              </div>
+                            )}
+                          </div>
+                        </section>
+
+                        <section className="border border-[#333333] bg-[#121212] p-6 rounded-md">
+                          <h3 className="text-sm font-bold uppercase tracking-wider mb-2 text-[#E4E3E0]">Payload Preview</h3>
+                          <p className="text-xs font-mono text-[#A1A1AA] mb-4">This is the exact JSON structure that will be sent via POST request.</p>
+
+                          <div className="bg-[#181818] text-[#E4E3E0] p-4 overflow-auto max-h-[300px] border border-[#333333] rounded-md">
+                            <pre className="text-[10px] font-mono">
+                              {JSON.stringify({
+                                url: result?.url || "https://example.com",
+                                timestamp: new Date().toISOString(),
+                                data: extractedData || { example: "Run a scrape to see real data" }
+                              }, null, 2)}
+                            </pre>
+                          </div>
+                        </section>
                       </div>
-                    </section>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </>
-    )}
-  </main>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </>
+        )}
+      </main>
 
       {/* Footer Status Bar */}
       <footer className="border-t border-[#333333] bg-[#121212] text-[#A1A1AA] px-6 py-2 flex justify-between items-center text-[9px] font-mono uppercase tracking-widest">
