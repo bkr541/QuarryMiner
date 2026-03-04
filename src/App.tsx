@@ -37,6 +37,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { extractStructuredData } from "./services/geminiService";
 import { EnvironmentPage } from "./components/environments/EnvironmentPage";
+import { SettingsPage } from "./components/settings/SettingsPage";
 import { useScrapeConfigs } from "./hooks/useScrapeConfigs";
 import { useEnvironments } from "./hooks/useEnvironments";
 import { useScrapingRuns } from "./hooks/useScrapingRuns";
@@ -529,7 +530,7 @@ export default function App() {
   const [leftPanelWidth, setLeftPanelWidth] = useState(450);
   const [isResizing, setIsResizing] = useState(false);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
-  const [activePage, setActivePage] = useState<'scrape' | 'dashboard' | 'environment'>('scrape');
+  const [activePage, setActivePage] = useState<'scrape' | 'dashboard' | 'environment' | 'settings'>('scrape');
 
   const startResizing = React.useCallback((e: React.MouseEvent) => {
     setIsResizing(true);
@@ -823,7 +824,7 @@ export default function App() {
                   <button
                     key={item.id}
                     onClick={() => {
-                      if (item.id === 'dashboard' || item.id === 'scrape' || item.id === 'environment') {
+                      if (item.id === 'dashboard' || item.id === 'scrape' || item.id === 'environment' || item.id === 'settings') {
                         setActivePage(item.id as any);
                         setIsSideMenuOpen(false);
                       }
@@ -880,6 +881,8 @@ export default function App() {
           <Dashboard />
         ) : activePage === 'environment' ? (
           <EnvironmentPage />
+        ) : activePage === 'settings' ? (
+          <SettingsPage />
         ) : (
           <>
             {/* Left Panel: Configuration */}
@@ -955,6 +958,12 @@ export default function App() {
                                 placeholder=".product-item"
                               />
                             </div>
+                            {templatePrimarySource === 'network' && waitSelector && (
+                              <p className="text-[9px] font-mono uppercase text-rose-500 mt-1.5 flex items-center gap-1">
+                                <AlertCircle size={10} />
+                                This parameter should be empty when Primary Source is Network Interception
+                              </p>
+                            )}
                           </div>
                           <div>
                             <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Output Formats</label>
@@ -1052,7 +1061,13 @@ export default function App() {
                                 <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Primary Source</label>
                                 <select
                                   value={templatePrimarySource}
-                                  onChange={(e: any) => setTemplatePrimarySource(e.target.value)}
+                                  onChange={(e: any) => {
+                                    const val = e.target.value;
+                                    setTemplatePrimarySource(val);
+                                    if (val === 'network') {
+                                      setSchema(JSON.stringify({}, null, 2));
+                                    }
+                                  }}
                                   className="w-full bg-[#181818] border border-[#333333] p-2.5 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors appearance-none"
                                 >
                                   <option value="auto">Auto</option>

@@ -298,6 +298,41 @@ async function startServer() {
     }
   });
 
+  // --- System Settings API ---
+  app.get("/api/settings", async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('id', 1)
+        .single();
+
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/settings", async (req, res) => {
+    try {
+      const { include_intercepted_responses } = req.body;
+      const { data, error } = await supabase
+        .from('system_settings')
+        .update({ include_intercepted_responses })
+        .eq('id', 1)
+        .select()
+        .single();
+
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // --- Scraping Runs API ---
   app.get("/api/scraping_runs", async (req, res) => {
     try {
