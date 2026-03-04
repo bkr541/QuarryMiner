@@ -42,6 +42,81 @@ import { useScrapeConfigs } from "./hooks/useScrapeConfigs";
 import { useEnvironments } from "./hooks/useEnvironments";
 import { useScrapingRuns } from "./hooks/useScrapingRuns";
 
+// --- Custom MultiSelect Component ---
+
+interface CustomMultiSelectProps {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+}
+
+const CustomMultiSelect = ({ label, options, selected, onChange }: CustomMultiSelectProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleOption = (option: string) => {
+    if (selected.includes(option)) {
+      onChange(selected.filter(item => item !== option));
+    } else {
+      onChange([...selected, option]);
+    }
+  };
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">{label}</label>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between bg-[#181818] border border-[#333333] p-2.5 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors"
+      >
+        <span>
+          {selected.length === 0 ? "Select options..." : `${selected.length} Selected`}
+        </span>
+        <ChevronRight size={14} className={`text-[#A1A1AA] transition-transform duration-200 ${isOpen ? '-rotate-90' : 'rotate-90'}`} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.15 }}
+            className="absolute z-50 w-full mt-2 bg-[#181818] border border-[#333333] rounded-md shadow-2xl overflow-hidden"
+          >
+            <div className="max-h-60 overflow-y-auto w-full p-2 space-y-1">
+              {options.map((option) => (
+                <label
+                  key={option}
+                  className={`flex items-center gap-3 w-full p-2 rounded-md cursor-pointer transition-colors ${selected.includes(option) ? 'bg-[#D95D39]/10' : 'hover:bg-[#222222]'}`}
+                >
+                  <div className={`w-4 h-4 rounded-sm flex items-center justify-center border transition-colors ${selected.includes(option) ? 'bg-[#D95D39] border-[#D95D39]' : 'border-[#444444] bg-[#121212]'}`}>
+                    {selected.includes(option) && <Check size={12} className="text-white" />}
+                  </div>
+                  <span className={`text-[13px] ${selected.includes(option) ? 'text-[#E4E3E0] font-medium' : 'text-[#A1A1AA]'}`}>
+                    {option}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 // --- Schema Visual Editor Components ---
 
 type SchemaValue = string | number | boolean | SchemaObject | SchemaArray;
@@ -402,7 +477,7 @@ const Dashboard = () => {
 
 export default function App() {
   const [url, setUrl] = useState("https://quotes.toscrape.com/js/");
-  const [waitSelector, setWaitSelector] = useState(".quote");
+  const [waitSelector, setWaitSelector] = useState("");
   const [formats, setFormats] = useState<string[]>(["JSON", "HTML"]);
   const [schema, setSchema] = useState(JSON.stringify({
     quotes: [
@@ -965,29 +1040,12 @@ export default function App() {
                               </p>
                             )}
                           </div>
-                          <div>
-                            <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Output Formats</label>
-                            <div className="flex flex-wrap gap-2">
-                              {["Markdown", "HTML", "JSON"].map((f) => (
-                                <button
-                                  key={f}
-                                  onClick={() => {
-                                    setFormats(prev =>
-                                      prev.includes(f)
-                                        ? prev.filter(item => item !== f)
-                                        : [...prev, f]
-                                    )
-                                  }}
-                                  className={`px-3 py-1.5 text-[10px] font-mono uppercase border transition-all rounded-md ${formats.includes(f)
-                                    ? 'bg-gradient-to-r from-[#D95D39] to-[#E87A5D] border-transparent text-white shadow-md shadow-[#D95D39]/20'
-                                    : 'bg-[#181818] border-[#333333] text-[#A1A1AA] hover:border-[#D95D39] hover:text-[#E4E3E0]'
-                                    }`}
-                                >
-                                  {f}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
+                          <CustomMultiSelect
+                            label="Output Formats"
+                            options={["Markdown", "HTML", "JSON"]}
+                            selected={formats}
+                            onChange={setFormats}
+                          />
                           {formats.includes("JSON") && (
                             <div className="pt-2">
                               <div className="flex items-center justify-between mb-1">
@@ -1034,29 +1092,12 @@ export default function App() {
                               <Code2 size={12} className="text-[#D95D39]" /> Request Template
                             </h4>
                             <div className="space-y-4">
-                              <div>
-                                <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Template Formats</label>
-                                <div className="flex flex-wrap gap-2">
-                                  {["Markdown", "HTML", "JSON"].map((f) => (
-                                    <button
-                                      key={`template-${f}`}
-                                      onClick={() => {
-                                        setTemplateFormats(prev =>
-                                          prev.includes(f)
-                                            ? prev.filter(item => item !== f)
-                                            : [...prev, f]
-                                        )
-                                      }}
-                                      className={`px-3 py-1.5 text-[10px] font-mono uppercase border transition-all rounded-md ${templateFormats.includes(f)
-                                        ? 'bg-[#333333] border-transparent text-[#E4E3E0]'
-                                        : 'bg-[#181818] border-[#333333] text-[#A1A1AA] hover:border-[#D95D39]'
-                                        }`}
-                                    >
-                                      {f}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
+                              <CustomMultiSelect
+                                label="Input Formats"
+                                options={["Markdown", "HTML", "JSON"]}
+                                selected={templateFormats}
+                                onChange={setTemplateFormats}
+                              />
                               <div>
                                 <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Primary Source</label>
                                 <select
