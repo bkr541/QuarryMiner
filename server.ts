@@ -298,6 +298,24 @@ async function startServer() {
     }
   });
 
+  // --- Scraping Runs API ---
+  app.get("/api/scraping_runs", async (req, res) => {
+    try {
+      const { limit = 50 } = req.query;
+      const { data, error } = await supabase
+        .from('scraping_runs')
+        .select('*')
+        .eq('user_id', req.userId)
+        .order('created_at', { ascending: false })
+        .limit(Number(limit));
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // API Route for scraping
   app.post("/api/scrape", async (req, res) => {
     const { url, waitSelector, scrollCount = 0, formats = ["HTML", "JSON"] } = req.body;
@@ -553,6 +571,23 @@ async function startServer() {
 
         await browser.close();
 
+        // Save successful run to database
+        try {
+          await supabase.from('scraping_runs').insert([{
+            user_id: req.userId,
+            url: targetUrl,
+            status: 'success',
+            metadata: {
+              title,
+              formats_requested: formats,
+              attempt_count: attempt,
+              intercepted_json_count: interceptedJson.length
+            }
+          }]);
+        } catch (dbErr) {
+          console.error("Failed to log successful run to db:", dbErr);
+        }
+
         return res.json({
           success: true,
           data: {
@@ -570,7 +605,25 @@ async function startServer() {
       }
     }
 
-    res.status(500).json({ error: `Failed after ${maxRetries} attempts. Last error: ${lastError?.message || "Bot detection blocked access"}` });
+    const errorMessage = `Failed after ${maxRetries} attempts. Last error: ${lastError?.message || "Bot detection blocked access"}`;
+
+    // Save failed run to database
+    try {
+      await supabase.from('scraping_runs').insert([{
+        user_id: req.userId,
+        url: targetUrl,
+        status: 'failed',
+        error_message: errorMessage,
+        metadata: {
+          formats_requested: formats,
+          attempt_count: attempt
+        }
+      }]);
+    } catch (dbErr) {
+      console.error("Failed to log failed run to db:", dbErr);
+    }
+
+    res.status(500).json({ error: errorMessage });
   });
 
   // Vite middleware for development

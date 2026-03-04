@@ -10,6 +10,7 @@ import {
   Terminal,
   Copy,
   Check,
+  Download,
   Plus,
   Trash2,
   Type as TypeIcon,
@@ -37,6 +38,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { extractStructuredData } from "./services/geminiService";
 import { EnvironmentPage } from "./components/environments/EnvironmentPage";
 import { useScrapeConfigs } from "./hooks/useScrapeConfigs";
+import { useScrapingRuns } from "./hooks/useScrapingRuns";
 
 // --- Schema Visual Editor Components ---
 
@@ -446,7 +448,9 @@ export default function App() {
 
   // New features state
   const [activeTab, setActiveTab] = useState<"preview" | "data" | "history" | "export">("data");
-  const [runHistory, setRunHistory] = useState<Array<{ id: string, url: string, status: string, timestamp: number, result?: any, error?: string }>>([]);
+
+  // Scrape history state
+  const { runs: runHistory, fetchRuns } = useScrapingRuns();
   const [logs, setLogs] = useState<Array<{ timestamp: number, message: string, type: 'info' | 'error' | 'success' }>>([]);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [isSendingWebhook, setIsSendingWebhook] = useState(false);
@@ -455,6 +459,26 @@ export default function App() {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveConfigName, setSaveConfigName] = useState("");
   const { createConfig } = useScrapeConfigs();
+
+  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
+
+  const handleCopyData = async (data: string, id: string) => {
+    await navigator.clipboard.writeText(data);
+    setCopiedStates(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => setCopiedStates(prev => ({ ...prev, [id]: false })), 2000);
+  };
+
+  const handleDownloadData = (data: string, filename: string, type: string) => {
+    const blob = new Blob([data], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleSaveConfig = async () => {
     try {
@@ -595,26 +619,19 @@ export default function App() {
       setExtractedData(extracted);
       addLog(`AI extraction complete.`, 'success');
 
-      setRunHistory(prev => [{
-        id: runId,
-        url,
-        status: 'success',
-        timestamp: Date.now(),
-        result: extracted
-      }, ...prev]);
+      addLog(`Scraping completed for ${url}`, 'success');
+
+      // Fetch the newly updated database records for Run History
+      await fetchRuns();
 
       setActiveTab('data');
     } catch (err: any) {
       setError(err.message);
-      addLog(`Error: ${err.message}`, 'error');
 
-      setRunHistory(prev => [{
-        id: runId,
-        url,
-        status: 'error',
-        timestamp: Date.now(),
-        error: err.message
-      }, ...prev]);
+      addLog(`Scraping failed: ${err.message}`, 'error');
+
+      // Fetch the newly updated database records to show the failed attempt
+      await fetchRuns();
 
       if (!rawResponse) {
         setRawResponse(prev => prev || {
@@ -1055,7 +1072,25 @@ export default function App() {
                                         </div>
                                       </div>
                                       <div>
-                                        <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Body</label>
+                                        <div className="flex items-center justify-between mb-2">
+                                          <label className="text-[10px] font-mono uppercase text-[#A1A1AA]">Response Body</label>
+                                          <div className="flex gap-3">
+                                            <button
+                                              onClick={() => handleCopyData(typeof rawResponse.body === 'string' ? rawResponse.body : JSON.stringify(rawResponse.body, null, 2), 'error-body')}
+                                              className="text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors flex items-center gap-1 text-[9px] uppercase tracking-wider"
+                                              title="Copy Response Body"
+                                            >
+                                              {copiedStates['error-body'] ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                                            </button>
+                                            <button
+                                              onClick={() => handleDownloadData(typeof rawResponse.body === 'string' ? rawResponse.body : JSON.stringify(rawResponse.body, null, 2), 'error_response_body.txt', 'text/plain')}
+                                              className="text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors flex items-center gap-1 text-[9px] uppercase tracking-wider"
+                                              title="Download Response Body"
+                                            >
+                                              <Download size={12} />
+                                            </button>
+                                          </div>
+                                        </div>
                                         <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
                                           <pre className="text-[10px] font-mono overflow-auto max-h-[300px] text-[#E4E3E0]">
                                             {typeof rawResponse.body === 'string'
@@ -1182,7 +1217,25 @@ export default function App() {
                                           </div>
                                         </div>
                                         <div>
-                                          <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Response Body</label>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <label className="text-[10px] font-mono uppercase text-[#A1A1AA]">Response Body</label>
+                                            <div className="flex gap-3">
+                                              <button
+                                                onClick={() => handleCopyData(typeof rawResponse.body === 'string' ? rawResponse.body : JSON.stringify(rawResponse.body, null, 2), 'success-body')}
+                                                className="text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors flex items-center gap-1 text-[9px] uppercase tracking-wider"
+                                                title="Copy Response Body"
+                                              >
+                                                {copiedStates['success-body'] ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                                              </button>
+                                              <button
+                                                onClick={() => handleDownloadData(typeof rawResponse.body === 'string' ? rawResponse.body : JSON.stringify(rawResponse.body, null, 2), 'success_response_body.txt', 'text/plain')}
+                                                className="text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors flex items-center gap-1 text-[9px] uppercase tracking-wider"
+                                                title="Download Response Body"
+                                              >
+                                                <Download size={12} />
+                                              </button>
+                                            </div>
+                                          </div>
                                           <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
                                             <pre className="text-[10px] font-mono overflow-auto max-h-[300px] text-[#E4E3E0]">
                                               {typeof rawResponse.body === 'string'
@@ -1203,7 +1256,25 @@ export default function App() {
                                         )}
                                         {result?.json && Array.isArray(result.json) && result.json.length > 0 && (
                                           <div>
-                                            <label className="text-[10px] font-mono uppercase text-[#A1A1AA] block mb-2">Intercepted JSON API Responses ({result.json.length})</label>
+                                            <div className="flex items-center justify-between mb-2">
+                                              <label className="text-[10px] font-mono uppercase text-[#A1A1AA]">Intercepted JSON API Responses ({result.json.length})</label>
+                                              <div className="flex gap-3">
+                                                <button
+                                                  onClick={() => handleCopyData(JSON.stringify(result.json, null, 2), 'success-json')}
+                                                  className="text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors flex items-center gap-1 text-[9px] uppercase tracking-wider"
+                                                  title="Copy Intercepted JSON"
+                                                >
+                                                  {copiedStates['success-json'] ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                                                </button>
+                                                <button
+                                                  onClick={() => handleDownloadData(JSON.stringify(result.json, null, 2), 'intercepted_api_responses.json', 'application/json')}
+                                                  className="text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors flex items-center gap-1 text-[9px] uppercase tracking-wider"
+                                                  title="Download Intercepted JSON"
+                                                >
+                                                  <Download size={12} />
+                                                </button>
+                                              </div>
+                                            </div>
                                             <div className="bg-[#121212] p-4 border border-[#333333] rounded-md">
                                               <pre className="text-[10px] font-mono overflow-auto max-h-[400px] text-[#E4E3E0]">
                                                 {JSON.stringify(result.json, null, 2)}
@@ -1317,7 +1388,7 @@ export default function App() {
                                   <div className={`w-2 h-2 rounded-full ${run.status === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                                   <div>
                                     <div className="text-sm font-medium truncate max-w-[300px] text-[#E4E3E0]">{run.url}</div>
-                                    <div className="text-[10px] font-mono text-[#A1A1AA]">{new Date(run.timestamp).toLocaleString()}</div>
+                                    <div className="text-[10px] font-mono text-[#A1A1AA]">{new Date(run.created_at).toLocaleString()}</div>
                                   </div>
                                 </div>
                                 <div className="text-[10px] font-mono uppercase">
