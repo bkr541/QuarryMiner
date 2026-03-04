@@ -15,6 +15,13 @@ export function useSettings() {
         try {
             setLoading(true);
             const res = await fetch('/api/settings');
+
+            const ct = res.headers.get("content-type") || "";
+            if (!ct.includes("application/json")) {
+                const text = await res.text();
+                throw new Error(`Expected JSON from /api/settings but got ${ct || "unknown"}: ${text.slice(0, 120)}`);
+            }
+
             if (!res.ok) throw new Error('Failed to fetch settings');
             const json = await res.json();
             if (!json.success) throw new Error(json.error);
@@ -34,6 +41,13 @@ export function useSettings() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ include_intercepted_responses })
             });
+
+            const ct = res.headers.get("content-type") || "";
+            if (!ct.includes("application/json")) {
+                const text = await res.text();
+                throw new Error(`Expected JSON from POST /api/settings but got ${ct || "unknown"}: ${text.slice(0, 120)}`);
+            }
+
             if (!res.ok) throw new Error('Failed to update settings');
             const json = await res.json();
             if (!json.success) throw new Error(json.error);

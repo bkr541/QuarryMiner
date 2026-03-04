@@ -300,15 +300,21 @@ async function startServer() {
 
   // --- System Settings API ---
   app.get("/api/settings", async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
     try {
       const { data, error } = await supabase
         .from('system_settings')
-        .select('*')
-        .eq('id', 1)
-        .single();
+        .select('include_intercepted_responses')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (error) throw error;
-      res.json({ success: true, data });
+      if (error) {
+        throw error;
+      }
+
+      const setting = data || { include_intercepted_responses: false };
+      res.json({ success: true, data: setting });
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });
@@ -316,17 +322,37 @@ async function startServer() {
   });
 
   app.post("/api/settings", async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
     try {
       const { include_intercepted_responses } = req.body;
-      const { data, error } = await supabase
-        .from('system_settings')
-        .update({ include_intercepted_responses })
-        .eq('id', 1)
-        .select()
-        .single();
 
-      if (error) throw error;
-      res.json({ success: true, data });
+      // Find the most recent row to update
+      const { data: existing } = await supabase
+        .from('system_settings')
+        .select('id')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let result, err;
+      if (existing) {
+        ({ data: result, error: err } = await supabase
+          .from('system_settings')
+          .update({ include_intercepted_responses, updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+          .select('include_intercepted_responses')
+          .single());
+      } else {
+        // Fallback to inserting a new row (might violate id=1 constraint if present, but adheres to instructions)
+        ({ data: result, error: err } = await supabase
+          .from('system_settings')
+          .insert([{ id: 1, include_intercepted_responses, updated_at: new Date().toISOString() }])
+          .select('include_intercepted_responses')
+          .single());
+      }
+
+      if (err) throw err;
+      res.json({ success: true, data: result || { include_intercepted_responses } });
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });
@@ -841,6 +867,12 @@ async function startServer() {
     }
 
     res.status(500).json({ error: errorMessage });
+  });
+
+  // Catch-all to ensure unmatched /api routes return JSON, preventing fallback to Vite SPA handler
+  app.all("/api/*", (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(404).json({ success: false, error: "Not found" });
   });
 
   // Vite middleware for development
