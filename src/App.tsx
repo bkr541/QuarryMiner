@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { extractStructuredData } from "./services/geminiService";
 import { EnvironmentPage } from "./components/environments/EnvironmentPage";
 import { useScrapeConfigs } from "./hooks/useScrapeConfigs";
+import { useEnvironments } from "./hooks/useEnvironments";
 import { useScrapingRuns } from "./hooks/useScrapingRuns";
 
 // --- Schema Visual Editor Components ---
@@ -419,8 +420,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Hook for Scrape Configurations
+  // Hook for Scrape Configurations & Environments
   const { configs: scrapeConfigs, loading: configsLoading } = useScrapeConfigs();
+  const { environments } = useEnvironments();
   const [activeConfigId, setActiveConfigId] = useState<string>('');
 
   // Handle Loading a Configuration
@@ -433,6 +435,18 @@ export default function App() {
       if (config.example_url) setUrl(config.example_url);
       if (config.wait_selector) setWaitSelector(config.wait_selector);
       if (config.formats) setFormats(config.formats);
+
+      const rt = config.options?.requestTemplate;
+      if (rt) {
+        if (rt.formats) setTemplateFormats(rt.formats);
+        if (rt.capture?.primarySource) setTemplatePrimarySource(rt.capture.primarySource);
+        if (rt.capture?.network?.urlIncludes) setTemplateUrlIncludes(rt.capture.network.urlIncludes);
+      } else {
+        // Reset to defaults if no template
+        setTemplateFormats(["JSON"]);
+        setTemplatePrimarySource("network");
+        setTemplateUrlIncludes("/Flight/GetLowFareAvailability");
+      }
     }
   };
 
@@ -440,6 +454,11 @@ export default function App() {
   const [isResponseOpen, setIsResponseOpen] = useState(true);
   const [isRawOutputOpen, setIsRawOutputOpen] = useState(false);
   const [rawResponse, setRawResponse] = useState<any>(null);
+
+  // Request Template states
+  const [templateFormats, setTemplateFormats] = useState<string[]>(["JSON"]);
+  const [templatePrimarySource, setTemplatePrimarySource] = useState<"auto" | "dom" | "network">("network");
+  const [templateUrlIncludes, setTemplateUrlIncludes] = useState("/Flight/GetLowFareAvailability");
 
   // Left panel collapsible states
   const [isTargetConfigOpen, setIsTargetConfigOpen] = useState(true);
@@ -487,7 +506,15 @@ export default function App() {
         example_url: url,
         wait_selector: waitSelector,
         formats: formats,
-        // we'd add extract_schema_id if we have one, but currently schema is inline JSON
+        options: {
+          requestTemplate: {
+            formats: templateFormats,
+            capture: {
+              primarySource: templatePrimarySource,
+              ...(templatePrimarySource === 'network' ? { network: { urlIncludes: templateUrlIncludes } } : {})
+            }
+          }
+        },
         is_favorite: false
       });
       setIsSaveModalOpen(false);
@@ -564,6 +591,60 @@ export default function App() {
     return () => window.removeEventListener('message', handleMessage);
   }, [schema]);
 
+  const buildScrapeRequest = () => {
+    // 4) System Defaults
+    const payload: any = {
+      scrollCount: 1,
+      formats: ["JSON"],
+      waitSelector: "",
+    };
+
+    const activeConfig = scrapeConfigs.find(c => c.id === activeConfigId);
+    let activeEnv: any = null;
+
+    if (activeConfig?.environment?.id) {
+      activeEnv = environments.find(e => e.id === activeConfig.environment?.id);
+    }
+
+    // 3) Environment Defaults
+    if (activeEnv) {
+      if (activeEnv.default_formats) payload.formats = activeEnv.default_formats;
+      if (activeEnv.default_wait_selector) payload.waitSelector = activeEnv.default_wait_selector;
+      if (activeEnv.default_scroll_count !== undefined && activeEnv.default_scroll_count !== null) payload.scrollCount = activeEnv.default_scroll_count;
+      if (activeEnv.default_headers) payload.headers = activeEnv.default_headers;
+      if (activeEnv.cookie_jar) payload.cookies = activeEnv.cookie_jar;
+    }
+
+    // 2) Configuration Request Template
+    const template = activeConfig?.options?.requestTemplate;
+    if (template) {
+      if (template.formats) payload.formats = template.formats;
+      if (template.capture) payload.capture = template.capture;
+    }
+
+    // 1) UI Overrides (Highest Precedence)
+    if (url) payload.url = url;
+    if (formats && formats.length > 0) payload.formats = formats;
+    if (waitSelector) payload.waitSelector = waitSelector;
+
+    if (templateFormats && templateFormats.length > 0) payload.formats = templateFormats;
+    if (templatePrimarySource) {
+      payload.capture = {
+        primarySource: templatePrimarySource,
+        network: templatePrimarySource === 'network' ? { urlIncludes: templateUrlIncludes } : undefined
+      };
+    }
+
+    // Explicit overrides based on instructions (for network intercept configs)
+    if (payload.capture?.primarySource === 'network') {
+      payload.waitSelector = ""; // Ignore wait selector
+    }
+
+    return payload;
+  };
+
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
   const handleScrape = async () => {
     setIsScraping(true);
     setError(null);
@@ -576,10 +657,11 @@ export default function App() {
     addLog(`Starting scrape for ${url}`, 'info');
 
     try {
+      const payload = buildScrapeRequest();
       const response = await fetch("/api/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, waitSelector, scrollCount: 1, formats }),
+        body: JSON.stringify(payload),
       });
 
       const headers: Record<string, string> = {};
@@ -608,16 +690,21 @@ export default function App() {
         throw new Error(errorMessage);
       }
 
-      setResult(data.data);
-      const contentToExtract = data.data.markdown || data.data.html || "";
-      const size = contentToExtract.length;
-      addLog(`Scrape successful. Content size: ${(size / 1024).toFixed(2)} KB`, 'success');
+      if (data && typeof data === 'object' && data.ok === false) {
+        setResult(data);
+        addLog(`Scrape completed with diagnostic payload: ${data.errorType}`, 'error');
+      } else {
+        setResult(data.data);
+        const contentToExtract = data.data?.markdown || data.data?.html || "";
+        const size = contentToExtract.length;
+        addLog(`Scrape successful. Content size: ${(size / 1024).toFixed(2)} KB`, 'success');
 
-      setIsExtracting(true);
-      addLog(`Starting AI extraction using Gemini...`, 'info');
-      const extracted = await extractStructuredData(contentToExtract, JSON.parse(schema));
-      setExtractedData(extracted);
-      addLog(`AI extraction complete.`, 'success');
+        setIsExtracting(true);
+        addLog(`Starting AI extraction using Gemini...`, 'info');
+        const extracted = await extractStructuredData(contentToExtract, JSON.parse(schema));
+        setExtractedData(extracted);
+        addLog(`AI extraction complete.`, 'success');
+      }
 
       addLog(`Scraping completed for ${url}`, 'success');
 
@@ -931,6 +1018,63 @@ export default function App() {
                               </div>
                             </div>
                           )}
+
+                          {/* Request Template Config Block */}
+                          <div className="border-t border-[#333333] pt-4 mt-4">
+                            <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#E4E3E0] mb-4 flex items-center gap-2">
+                              <Code2 size={12} className="text-[#D95D39]" /> Request Template
+                            </h4>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Template Formats</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {["Markdown", "HTML", "JSON"].map((f) => (
+                                    <button
+                                      key={`template-${f}`}
+                                      onClick={() => {
+                                        setTemplateFormats(prev =>
+                                          prev.includes(f)
+                                            ? prev.filter(item => item !== f)
+                                            : [...prev, f]
+                                        )
+                                      }}
+                                      className={`px-3 py-1.5 text-[10px] font-mono uppercase border transition-all rounded-md ${templateFormats.includes(f)
+                                        ? 'bg-[#333333] border-transparent text-[#E4E3E0]'
+                                        : 'bg-[#181818] border-[#333333] text-[#A1A1AA] hover:border-[#D95D39]'
+                                        }`}
+                                    >
+                                      {f}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Primary Source</label>
+                                <select
+                                  value={templatePrimarySource}
+                                  onChange={(e: any) => setTemplatePrimarySource(e.target.value)}
+                                  className="w-full bg-[#181818] border border-[#333333] p-2.5 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors appearance-none"
+                                >
+                                  <option value="auto">Auto</option>
+                                  <option value="dom">DOM</option>
+                                  <option value="network">Network Interception</option>
+                                </select>
+                              </div>
+                              {templatePrimarySource === 'network' && (
+                                <div>
+                                  <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Network URL Includes</label>
+                                  <input
+                                    type="text"
+                                    value={templateUrlIncludes}
+                                    onChange={(e) => setTemplateUrlIncludes(e.target.value)}
+                                    className="w-full bg-[#181818] border border-[#333333] py-2.5 px-4 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors"
+                                    placeholder="/api/v1/data"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
                         </div>
                         <div className="border-t border-[#333333] p-4 bg-[#181818] flex justify-end">
                           <button
@@ -939,6 +1083,24 @@ export default function App() {
                           >
                             Save Configuration
                           </button>
+                        </div>
+                        <div className="border-t border-[#333333] p-4 bg-[#121212]">
+                          <button
+                            onClick={() => setIsPreviewOpen(!isPreviewOpen)}
+                            className="w-full flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <ChevronRight className={`transition-transform duration-200 ${isPreviewOpen ? 'rotate-90' : ''}`} size={12} />
+                              Request Preview
+                            </div>
+                          </button>
+                          {isPreviewOpen && (
+                            <div className="mt-4 p-3 bg-[#181818] border border-[#333333] rounded-md overflow-x-auto">
+                              <pre className="text-[10px] font-mono text-[#E4E3E0]">
+                                {JSON.stringify(buildScrapeRequest(), null, 2)}
+                              </pre>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     )}
@@ -1134,6 +1296,62 @@ export default function App() {
                           animate={{ opacity: 1 }}
                           className="space-y-6"
                         >
+                          {result.ok === false && (
+                            <section className="border border-rose-900/50 overflow-hidden rounded-md bg-rose-950/20 mb-6">
+                              <div className="p-4 border-b border-rose-900/50 flex justify-between items-center">
+                                <div>
+                                  <h3 className="text-sm font-bold uppercase tracking-wider text-rose-500 flex items-center gap-2">
+                                    <AlertCircle size={16} /> Blocked / Diagnostic
+                                  </h3>
+                                  <p className="text-xs text-rose-400/80 mt-1">{result.message}</p>
+                                </div>
+                                <span className="text-[10px] uppercase font-mono bg-rose-900/30 text-rose-400 px-2 py-1 rounded border border-rose-900/50">
+                                  {result.errorType}
+                                </span>
+                              </div>
+                              <div className="p-4 flex flex-col md:flex-row gap-6">
+                                {result.diagnostics?.screenshotBase64 && (
+                                  <div className="w-full md:w-1/3">
+                                    <label className="text-[10px] font-mono uppercase text-rose-400/80 mb-2 block">Screenshot</label>
+                                    <img src={`data:image/png;base64,${result.diagnostics.screenshotBase64}`} alt="Diagnostic Screenshot" className="border border-rose-900/50 rounded-md object-contain w-full bg-black/50" />
+                                  </div>
+                                )}
+                                <div className="w-full md:w-2/3 space-y-4">
+                                  <div>
+                                    <label className="text-[10px] font-mono uppercase text-rose-400/80 mb-1 block">Final URL</label>
+                                    <p className="text-xs font-mono text-rose-200/90 break-all">{result.diagnostics?.finalUrl}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-mono uppercase text-rose-400/80 mb-1 block">Page Title</label>
+                                    <p className="text-xs font-mono text-rose-200/90">{result.diagnostics?.title}</p>
+                                  </div>
+                                  {result.diagnostics?.detectedMarkers?.length > 0 && (
+                                    <div>
+                                      <label className="text-[10px] font-mono uppercase text-rose-400/80 mb-1 block">Detected Markers</label>
+                                      <div className="flex flex-wrap gap-2">
+                                        {result.diagnostics.detectedMarkers.map((m: any, i: number) => (
+                                          <span key={i} className="text-[10px] bg-rose-900/40 text-rose-300 px-2 py-0.5 rounded border border-rose-900/50 uppercase font-mono">{m}</span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {result.diagnostics?.htmlSnippet && (
+                                    <div>
+                                      <div className="flex justify-between items-center mb-1">
+                                        <label className="text-[10px] font-mono uppercase text-rose-400/80 block">HTML Snippet</label>
+                                        <button onClick={() => navigator.clipboard.writeText(result.diagnostics?.htmlSnippet || "")} className="text-[10px] uppercase font-mono flex items-center gap-1 text-rose-400 hover:text-rose-300 transition-colors">
+                                          <Copy size={12} /> Copy
+                                        </button>
+                                      </div>
+                                      <pre className="text-[10px] font-mono text-rose-200/70 bg-black/40 p-3 rounded-md border border-rose-900/30 overflow-auto max-h-[150px] whitespace-pre-wrap break-all">
+                                        {result.diagnostics?.htmlSnippet}
+                                      </pre>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </section>
+                          )}
                           {/* Collapsible Response Group */}
                           <section className="border border-[#333333] overflow-hidden rounded-md">
                             <button

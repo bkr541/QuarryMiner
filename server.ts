@@ -318,7 +318,7 @@ async function startServer() {
 
   // API Route for scraping
   app.post("/api/scrape", async (req, res) => {
-    const { url, waitSelector, scrollCount = 0, formats = ["HTML", "JSON"] } = req.body;
+    const { url, waitSelector, scrollCount = 0, formats = ["HTML", "JSON"], capture } = req.body;
 
     if (!url) {
       return res.status(400).json({ error: "URL is required" });
@@ -327,6 +327,18 @@ async function startServer() {
     let targetUrl = url;
     if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
       targetUrl = `https://${targetUrl}`;
+    }
+
+    let actualScrollCount = scrollCount;
+    let actualWaitSelector = waitSelector;
+    let actualFormats = (formats || []).map((f: string) => String(f).toLowerCase());
+
+    if (capture?.primarySource === 'network') {
+      actualScrollCount = 0;
+      actualWaitSelector = "";
+      if (!actualFormats.includes('json')) {
+        actualFormats.push('json');
+      }
     }
 
     const maxRetries = 5;
@@ -376,13 +388,25 @@ async function startServer() {
         const page = await context.newPage();
 
         const interceptedJson: any[] = [];
-        if (formats.includes("JSON")) {
+        let primaryNetworkJson: any = null;
+        let primaryNetworkMatchedUrl: string = "";
+
+        if (actualFormats.includes("json") || capture?.primarySource === 'network') {
           page.on('response', async (response) => {
             const contentType = response.headers()['content-type'] || '';
             if (contentType.includes('application/json')) {
               try {
                 const json = await response.json();
                 interceptedJson.push({ url: response.url(), data: json });
+
+                // If this is our targeted primary network interception point
+                if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
+                  if (response.url().includes(capture.network.urlIncludes)) {
+                    primaryNetworkJson = json;
+                    console.log(`[NETWORK CAPTURE] Successfully intercepted target URL: ${response.url()}`);
+                  }
+                }
+
               } catch (e) {
                 // Ignore errors (e.g. 204 No Content)
               }
@@ -493,10 +517,31 @@ async function startServer() {
 
         console.log(`Scraping Attempt ${attempt}: ${targetUrl}`);
 
-        const response = await page.goto(targetUrl, {
-          waitUntil: "commit",
-          timeout: 60000
-        });
+        let response;
+        if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
+          console.log(`[NETWORK CAPTURE] Setting up waitForResponse for: ${capture.network.urlIncludes}`);
+          const [interceptedResponse, navigationResponse] = await Promise.all([
+            page.waitForResponse(res => res.url().includes(capture.network.urlIncludes) && res.status() >= 200 && res.status() <= 299, { timeout: 60000 }).catch(e => {
+              console.warn(`[NETWORK CAPTURE] Failed to intercept URL within timeout: ${e.message}`);
+              return null;
+            }),
+            page.goto(targetUrl, { waitUntil: "commit", timeout: 60000 })
+          ]);
+          response = navigationResponse;
+          if (interceptedResponse) {
+            try {
+              primaryNetworkJson = await interceptedResponse.json();
+              console.log(`[NETWORK CAPTURE] Successfully evaluated and saved intercept response.`);
+            } catch (e) {
+              console.warn(`[NETWORK CAPTURE] Failed to parse intercepted JSON: ${e}`);
+            }
+          }
+        } else {
+          response = await page.goto(targetUrl, {
+            waitUntil: "commit",
+            timeout: 60000
+          });
+        }
         console.log(`[STEALTH] page.goto completed for attempt ${attempt}`);
 
         if (response && (response.status() === 403 || response.status() === 429)) {
@@ -561,10 +606,10 @@ async function startServer() {
         }
 
         const finalContent = await page.content();
-        const title = await page.title();
+        const finalTitle = await page.title();
 
         let markdown = "";
-        if (formats.includes("Markdown")) {
+        if (actualFormats.includes("markdown")) {
           const turndownService = new TurndownService();
           markdown = turndownService.turndown(finalContent);
         }
@@ -578,8 +623,8 @@ async function startServer() {
             url: targetUrl,
             status: 'success',
             metadata: {
-              title,
-              formats_requested: formats,
+              title: finalTitle,
+              formats_requested: actualFormats,
               attempt_count: attempt,
               intercepted_json_count: interceptedJson.length
             }
@@ -588,15 +633,31 @@ async function startServer() {
           console.error("Failed to log successful run to db:", dbErr);
         }
 
+        // Format final JSON payload including target `primarySource` network data
+        let finalJsonPayload: any = undefined;
+        if (actualFormats.includes("json") || capture?.primarySource === 'network') {
+          finalJsonPayload = interceptedJson;
+          if (capture?.primarySource === 'network') {
+            finalJsonPayload = {
+              primarySource: 'network',
+              primary: primaryNetworkJson,
+              matchedUrl: primaryNetworkMatchedUrl,
+              intercepted: interceptedJson
+            };
+          }
+        }
+
         return res.json({
+          ok: true,
           success: true,
+          json: finalJsonPayload,
           data: {
             url: targetUrl,
-            title,
-            html: formats.includes("HTML") ? finalContent : undefined,
-            markdown: formats.includes("Markdown") ? markdown : undefined,
-            json: formats.includes("JSON") ? interceptedJson : undefined,
-          },
+            title: finalTitle,
+            html: actualFormats.includes("html") ? finalContent : undefined,
+            markdown: actualFormats.includes("markdown") ? markdown : undefined,
+            json: finalJsonPayload,
+          }
         });
       } catch (error: any) {
         if (browser) await browser.close();

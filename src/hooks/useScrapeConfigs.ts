@@ -12,7 +12,18 @@ export interface ScrapeConfiguration {
     formats?: string[] | null;
     extract_schema_id?: string | null;
     webhook_id?: string | null;
-    options?: any | null;
+    options?: {
+        requestTemplate?: {
+            formats?: string[];
+            capture?: {
+                primarySource: 'auto' | 'dom' | 'network';
+                network?: {
+                    urlIncludes: string;
+                }
+            }
+        };
+        [key: string]: any;
+    } | null;
     is_favorite: boolean;
     created_at: string;
     updated_at: string;
