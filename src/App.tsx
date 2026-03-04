@@ -36,6 +36,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { extractStructuredData } from "./services/geminiService";
 import { EnvironmentPage } from "./components/environments/EnvironmentPage";
+import { useScrapeConfigs } from "./hooks/useScrapeConfigs";
 
 // --- Schema Visual Editor Components ---
 
@@ -416,6 +417,23 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Hook for Scrape Configurations
+  const { configs: scrapeConfigs, loading: configsLoading } = useScrapeConfigs();
+  const [activeConfigId, setActiveConfigId] = useState<string>('');
+
+  // Handle Loading a Configuration
+  const handleLoadConfig = (configId: string) => {
+    setActiveConfigId(configId);
+    if (!configId) return;
+
+    const config = scrapeConfigs.find(c => c.id === configId);
+    if (config) {
+      if (config.example_url) setUrl(config.example_url);
+      if (config.wait_selector) setWaitSelector(config.wait_selector);
+      if (config.formats) setFormats(config.formats);
+    }
+  };
+
   // New state for collapsible groups and raw output
   const [isResponseOpen, setIsResponseOpen] = useState(true);
   const [isRawOutputOpen, setIsRawOutputOpen] = useState(false);
@@ -433,6 +451,28 @@ export default function App() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [isSendingWebhook, setIsSendingWebhook] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<string | null>(null);
+
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [saveConfigName, setSaveConfigName] = useState("");
+  const { createConfig } = useScrapeConfigs();
+
+  const handleSaveConfig = async () => {
+    try {
+      await createConfig({
+        name: saveConfigName,
+        example_url: url,
+        wait_selector: waitSelector,
+        formats: formats,
+        // we'd add extract_schema_id if we have one, but currently schema is inline JSON
+        is_favorite: false
+      });
+      setIsSaveModalOpen(false);
+      setSaveConfigName("");
+      addLog(`Saved configuration '${saveConfigName}'`, 'success');
+    } catch (err: any) {
+      addLog(`Failed to save config: ${err.message}`, 'error');
+    }
+  };
 
   // Resizable Panel State
   const [leftPanelWidth, setLeftPanelWidth] = useState(450);
@@ -765,7 +805,28 @@ export default function App() {
                         className="overflow-hidden bg-[#121212]"
                       >
                         <div className="p-6 space-y-4">
+
+                          {/* Load Configuration Dropdown */}
                           <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="text-[10px] font-mono uppercase block text-[#A1A1AA]">Load Saved Configuration</label>
+                              {configsLoading && <Loader2 size={12} className="animate-spin text-[#D95D39]" />}
+                            </div>
+                            <select
+                              value={activeConfigId}
+                              onChange={(e) => handleLoadConfig(e.target.value)}
+                              className="w-full bg-[#1A1A1A] border border-[#333333] p-2.5 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-md transition-colors appearance-none"
+                            >
+                              <option value="">-- Select a Saved Configuration --</option>
+                              {scrapeConfigs.map(config => (
+                                <option key={config.id} value={config.id}>
+                                  {config.name} {config.environment?.name ? `(${config.environment.name})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="border-t border-[#333333] pt-4">
                             <label className="text-[10px] font-mono uppercase mb-1 block text-[#A1A1AA]">Target URL</label>
                             <div className="relative">
                               <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A1A1AA]" />
@@ -854,44 +915,13 @@ export default function App() {
                             </div>
                           )}
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </section>
-
-                {/* Developer Options Group */}
-                <section className="border-b border-[#333333]">
-                  <button
-                    onClick={() => setIsDevOptionsOpen(!isDevOptionsOpen)}
-                    className="w-full flex items-center justify-between p-4 bg-[#181818] hover:bg-[#222222] transition-colors border-b border-[#333333]"
-                  >
-                    <div className="flex items-center gap-2">
-                      <ChevronRight className={`transition-transform duration-200 text-[#A1A1AA] ${isDevOptionsOpen ? 'rotate-90' : ''}`} size={14} />
-                      <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#E4E3E0]">Developer Options</h3>
-                    </div>
-                  </button>
-
-                  <AnimatePresence initial={false}>
-                    {isDevOptionsOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden bg-[#121212]"
-                      >
-                        <div className="p-6 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Engine Version</span>
-                            <span className="text-[10px] font-mono uppercase text-[#E4E3E0]">v3.1-flash</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Stealth Mode</span>
-                            <span className="text-[10px] font-mono uppercase text-emerald-500">Enabled</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">Retry Strategy</span>
-                            <span className="text-[10px] font-mono uppercase text-[#E4E3E0]">Exponential Backoff</span>
-                          </div>
+                        <div className="border-t border-[#333333] p-4 bg-[#181818] flex justify-end">
+                          <button
+                            onClick={() => setIsSaveModalOpen(true)}
+                            className="text-[10px] font-mono uppercase tracking-widest text-[#D95D39] hover:text-[#E87A5D] transition-colors border border-[#D95D39]/30 px-3 py-1.5 rounded bg-[#D95D39]/5"
+                          >
+                            Save Configuration
+                          </button>
                         </div>
                       </motion.div>
                     )}
@@ -924,8 +954,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-
-            {/* Resize Handle */}
+            {/* End of Left Side configuration wrappers */}
             <div
               onMouseDown={startResizing}
               className={`w-1 hover:w-1.5 bg-transparent cursor-col-resize transition-all hover:bg-[#D95D39] active:bg-[#D95D39] z-10 shrink-0 ${isResizing ? 'bg-[#D95D39] w-1.5' : ''}`}
@@ -958,9 +987,7 @@ export default function App() {
                 >
                   Export
                 </button>
-
                 <div className="flex-1" />
-
                 {extractedData && activeTab === 'data' && (
                   <button
                     onClick={() => copyToClipboard(JSON.stringify(extractedData, null, 2))}
@@ -1393,7 +1420,7 @@ export default function App() {
       </main>
 
       {/* Footer Status Bar */}
-      <footer className="border-t border-[#333333] bg-[#121212] text-[#A1A1AA] px-6 py-2 flex justify-between items-center text-[9px] font-mono uppercase tracking-widest">
+      < footer className="border-t border-[#333333] bg-[#121212] text-[#A1A1AA] px-6 py-2 flex justify-between items-center text-[9px] font-mono uppercase tracking-widest" >
         <div className="flex gap-6">
           <span className="text-[#D95D39]">Engine: Playwright 1.45</span>
           <span>Stealth: Enabled</span>
@@ -1403,7 +1430,66 @@ export default function App() {
           <div className="w-1.5 h-1.5 bg-[#D95D39] rounded-full animate-pulse" />
           System Operational
         </div>
-      </footer>
-    </div>
+      </footer >
+
+      {/* Save Configuration Modal */}
+      <AnimatePresence>
+        {
+          isSaveModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-[#121212] border border-[#333333] rounded-xl shadow-2xl w-full max-w-md overflow-hidden shadow-black/50"
+              >
+                <div className="flex justify-between items-center p-6 border-b border-[#252525]">
+                  <h2 className="text-xl font-bold tracking-tight text-[#E4E3E0]">Save Scrape Configuration</h2>
+                  <button onClick={() => setIsSaveModalOpen(false)} className="p-2 text-[#A1A1AA] hover:text-[#E4E3E0] hover:bg-[#222222] rounded-full transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="text-xs font-mono uppercase mb-2 block text-[#A1A1AA] tracking-wider font-bold">Configuration Name</label>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={saveConfigName}
+                      onChange={(e) => setSaveConfigName(e.target.value)}
+                      className="w-full bg-[#1A1A1A] border border-[#333333] p-3 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-xl transition-colors"
+                      placeholder="e.g. Frontier Airlines Deals"
+                    />
+                  </div>
+                  <div className="bg-[#181818] p-4 rounded-md border border-[#333333]">
+                    <p className="text-[10px] font-mono uppercase text-[#A1A1AA] mb-2">Saving current settings:</p>
+                    <ul className="text-xs text-[#E4E3E0] space-y-1 font-mono">
+                      <li><span className="text-[#666]">URL:</span> {url || '(none)'}</li>
+                      <li><span className="text-[#666]">Wait Selector:</span> {waitSelector || '(none)'}</li>
+                      <li><span className="text-[#666]">Formats:</span> {formats.join(', ') || '(none)'}</li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 p-6 border-t border-[#252525] bg-[#181818]">
+                  <button
+                    onClick={() => setIsSaveModalOpen(false)}
+                    className="px-6 py-2.5 rounded-lg text-sm font-semibold tracking-wide text-[#A1A1AA] hover:text-[#E4E3E0] hover:bg-[#222222] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveConfig}
+                    disabled={!saveConfigName.trim()}
+                    className="px-6 py-2.5 rounded-lg text-sm font-semibold tracking-wide bg-[#D95D39] text-white hover:bg-[#c44c2a] transition-colors disabled:opacity-50"
+                  >
+                    Save Configuration
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )
+        }
+      </AnimatePresence >
+    </div >
   );
 }

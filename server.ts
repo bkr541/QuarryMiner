@@ -123,6 +123,12 @@ async function startServer() {
   app.post("/api/environments", async (req, res) => {
     try {
       const payload = { ...req.body, user_id: req.userId };
+
+      // Clean up empty UUIDs
+      if (payload.proxy_profile_id === "") {
+        payload.proxy_profile_id = null;
+      }
+
       const { data, error } = await supabase
         .from('environments')
         .insert([payload])
@@ -139,9 +145,16 @@ async function startServer() {
   // Update environment
   app.patch("/api/environments/:id", async (req, res) => {
     try {
+      const payload = { ...req.body };
+
+      // Clean up empty UUIDs
+      if (payload.proxy_profile_id === "") {
+        payload.proxy_profile_id = null;
+      }
+
       const { data, error } = await supabase
         .from('environments')
-        .update(req.body)
+        .update(payload)
         .eq('id', req.params.id)
         .eq('user_id', req.userId)
         .select()
@@ -159,6 +172,121 @@ async function startServer() {
     try {
       const { error } = await supabase
         .from('environments')
+        .delete()
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId);
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Scrape Configurations API ---
+
+  // List scrape configs
+  app.get("/api/scrape_configs", async (req, res) => {
+    try {
+      const { search = '', sort = 'created_at', order = 'desc' } = req.query;
+      let query = supabase
+        .from('scrape_configurations')
+        .select(`
+          *,
+          environment:environments(id, name),
+          extract_schema:extract_schemas(id, name),
+          webhook:webhooks(id, name)
+        `)
+        .eq('user_id', req.userId);
+
+      if (search) {
+        query = query.ilike('name', `%${search}%`);
+      }
+
+      const { data, error } = await query.order(sort as string, { ascending: order === 'asc' });
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get single scrape config
+  app.get("/api/scrape_configs/:id", async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('scrape_configurations')
+        .select(`
+          *,
+          environment:environments(id, name),
+          extract_schema:extract_schemas(id, name),
+          webhook:webhooks(id, name)
+        `)
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId)
+        .single();
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Create scrape config
+  app.post("/api/scrape_configs", async (req, res) => {
+    try {
+      const payload = { ...req.body, user_id: req.userId };
+
+      // Clean up empty UUIDs
+      if (payload.environment_id === "") payload.environment_id = null;
+      if (payload.extract_schema_id === "") payload.extract_schema_id = null;
+      if (payload.webhook_id === "") payload.webhook_id = null;
+
+      const { data, error } = await supabase
+        .from('scrape_configurations')
+        .insert([payload])
+        .select()
+        .single();
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Update scrape config
+  app.patch("/api/scrape_configs/:id", async (req, res) => {
+    try {
+      const payload = { ...req.body };
+
+      // Clean up empty UUIDs
+      if (payload.environment_id === "") payload.environment_id = null;
+      if (payload.extract_schema_id === "") payload.extract_schema_id = null;
+      if (payload.webhook_id === "") payload.webhook_id = null;
+
+      const { data, error } = await supabase
+        .from('scrape_configurations')
+        .update(payload)
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId)
+        .select()
+        .single();
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Delete scrape config
+  app.delete("/api/scrape_configs/:id", async (req, res) => {
+    try {
+      const { error } = await supabase
+        .from('scrape_configurations')
         .delete()
         .eq('id', req.params.id)
         .eq('user_id', req.userId);
