@@ -113,11 +113,11 @@ const SchemaVisualNode = ({
   return (
     <div className="group">
       <div
-        className="flex items-center gap-2 py-1.5 px-2 hover:bg-black/5 rounded transition-colors"
+        className="flex items-center gap-2 py-1.5 px-2 hover:bg-[#222222] rounded transition-colors"
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
         {(type === 'object' || type === 'array') ? (
-          <button onClick={() => setIsOpen(!isOpen)} className="p-0.5 hover:bg-black/10 rounded">
+          <button onClick={() => setIsOpen(!isOpen)} className="p-0.5 hover:bg-[#333333] text-[#A1A1AA] hover:text-[#E4E3E0] rounded">
             <ChevronRight size={12} className={`transition-transform ${isOpen ? 'rotate-90' : ''}`} />
           </button>
         ) : (
@@ -125,7 +125,7 @@ const SchemaVisualNode = ({
         )}
 
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="p-1 bg-white border border-black/10 rounded shadow-sm">
+          <div className="p-1 bg-[#121212] border border-[#333333] rounded shadow-sm">
             {getTypeIcon(type)}
           </div>
 
@@ -133,7 +133,7 @@ const SchemaVisualNode = ({
             <input
               value={name}
               onChange={(e) => onUpdate(e.target.value, value)}
-              className="bg-transparent border-none focus:ring-0 p-0 text-[11px] font-mono font-bold w-24 truncate"
+              className="bg-transparent border-none focus:ring-0 p-0 text-[11px] font-mono font-bold w-24 truncate text-[#E4E3E0] placeholder-[#333333]"
               placeholder="key"
             />
           )}
@@ -141,24 +141,24 @@ const SchemaVisualNode = ({
           <select
             value={type}
             onChange={(e) => handleTypeChange(e.target.value)}
-            className="bg-transparent border-none focus:ring-0 p-0 text-[10px] font-mono opacity-40 uppercase cursor-pointer hover:opacity-100"
+            className="bg-transparent border-none focus:ring-0 p-0 text-[10px] font-mono uppercase cursor-pointer text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors"
           >
-            <option value="string">string</option>
-            <option value="number">number</option>
-            <option value="boolean">boolean</option>
-            <option value="object">object</option>
-            <option value="array">array</option>
+            <option value="string" className="bg-[#121212] text-[#E4E3E0]">string</option>
+            <option value="number" className="bg-[#121212] text-[#E4E3E0]">number</option>
+            <option value="boolean" className="bg-[#121212] text-[#E4E3E0]">boolean</option>
+            <option value="object" className="bg-[#121212] text-[#E4E3E0]">object</option>
+            <option value="array" className="bg-[#121212] text-[#E4E3E0]">array</option>
           </select>
         </div>
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {(type === 'object' || type === 'array') && (
-            <button onClick={addField} className="p-1 hover:bg-emerald-50 text-emerald-600 rounded">
+            <button onClick={addField} className="p-1 hover:bg-emerald-500/10 text-emerald-500 rounded">
               <Plus size={12} />
             </button>
           )}
           {name !== 'root' && (
-            <button onClick={() => onUpdate(name, null)} className="p-1 hover:bg-red-50 text-red-600 rounded">
+            <button onClick={() => onUpdate(name, null)} className="p-1 hover:bg-rose-500/10 text-rose-500 rounded">
               <Trash2 size={12} />
             </button>
           )}
@@ -166,7 +166,7 @@ const SchemaVisualNode = ({
       </div>
 
       {isOpen && type === 'object' && (
-        <div className="border-l border-black/5 ml-4">
+        <div className="border-l border-[#333333] ml-4">
           {Object.entries(value as SchemaObject).map(([propName, propValue]) => (
             <SchemaVisualNode
               key={propName}
@@ -189,7 +189,7 @@ const SchemaVisualNode = ({
           <div style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }} className="py-1">
             <button
               onClick={addField}
-              className="flex items-center gap-1 text-[10px] font-mono opacity-40 hover:opacity-100 transition-opacity"
+              className="flex items-center gap-1 text-[10px] font-mono text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors"
             >
               <Plus size={10} /> ADD FIELD
             </button>
@@ -198,7 +198,7 @@ const SchemaVisualNode = ({
       )}
 
       {isOpen && type === 'array' && (
-        <div className="border-l border-black/5 ml-4">
+        <div className="border-l border-[#333333] ml-4">
           {(value as SchemaArray).map((item, idx) => (
             <SchemaVisualNode
               key={idx}
@@ -216,7 +216,7 @@ const SchemaVisualNode = ({
           <div style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }} className="py-1">
             <button
               onClick={addField}
-              className="flex items-center gap-1 text-[10px] font-mono opacity-40 hover:opacity-100 transition-opacity"
+              className="flex items-center gap-1 text-[10px] font-mono text-[#A1A1AA] hover:text-[#E4E3E0] transition-colors"
             >
               <Plus size={10} /> ADD ITEM
             </button>
@@ -239,14 +239,14 @@ const SchemaVisualEditor = ({
     parsed = JSON.parse(schema);
   } catch (e) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600 text-xs font-mono">
+      <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded text-rose-500 text-xs font-mono">
         Invalid JSON. Switch to JSON view to fix.
       </div>
     );
   }
 
   return (
-    <div className="bg-white border border-black/10 rounded-sm overflow-auto max-h-[350px]">
+    <div className="bg-[#121212] border border-[#333333] rounded-sm overflow-auto max-h-[350px]">
       <div className="p-2">
         <SchemaVisualNode
           name="root"
