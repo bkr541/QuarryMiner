@@ -1186,10 +1186,10 @@ export default function App() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className="p-8 h-full"
+                      className="p-8 h-full overflow-auto"
                     >
                       {error && (
-                        <div className="space-y-4">
+                        <div className="space-y-4 mb-6">
                           <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -1352,6 +1352,19 @@ export default function App() {
                               </div>
                             </section>
                           )}
+
+                          {/* Metadata Section */}
+                          <section className="grid grid-cols-2 gap-4">
+                            <div className="border border-[#333333] p-4 bg-[#222222] rounded-md">
+                              <label className="text-[9px] font-mono uppercase text-[#A1A1AA] block mb-1">Page Title</label>
+                              <p className="text-sm font-medium truncate text-[#E4E3E0]">{result.title}</p>
+                            </div>
+                            <div className="border border-[#333333] p-4 bg-[#222222] rounded-md">
+                              <label className="text-[9px] font-mono uppercase text-[#A1A1AA] block mb-1">Source URL</label>
+                              <p className="text-sm font-medium truncate text-[#E4E3E0]">{result.url}</p>
+                            </div>
+                          </section>
+
                           {/* Collapsible Response Group */}
                           <section className="border border-[#333333] overflow-hidden rounded-md">
                             <button
@@ -1508,18 +1521,6 @@ export default function App() {
                                 </motion.div>
                               )}
                             </AnimatePresence>
-                          </section>
-
-                          {/* Metadata Section */}
-                          <section className="grid grid-cols-2 gap-4">
-                            <div className="border border-[#333333] p-4 bg-[#222222] rounded-md">
-                              <label className="text-[9px] font-mono uppercase text-[#A1A1AA] block mb-1">Page Title</label>
-                              <p className="text-sm font-medium truncate text-[#E4E3E0]">{result.title}</p>
-                            </div>
-                            <div className="border border-[#333333] p-4 bg-[#222222] rounded-md">
-                              <label className="text-[9px] font-mono uppercase text-[#A1A1AA] block mb-1">Source URL</label>
-                              <p className="text-sm font-medium truncate text-[#E4E3E0]">{result.url}</p>
-                            </div>
                           </section>
                         </motion.div>
                       )}
