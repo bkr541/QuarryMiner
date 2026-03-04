@@ -359,6 +359,21 @@ async function startServer() {
       return res.status(400).json({ error: "URL is required" });
     }
 
+    let includeInterceptedResponses = false;
+    try {
+      const { data } = await supabase
+        .from('system_settings')
+        .select('include_intercepted_responses')
+        .eq('id', 1)
+        .single();
+      if (data) {
+        includeInterceptedResponses = !!data.include_intercepted_responses;
+      }
+    } catch (e) {
+      console.warn("Failed to fetch system_settings, defaulting to false");
+    }
+    console.log(`[SCRAPE] include_intercepted_responses=${includeInterceptedResponses}`);
+
     let targetUrl = url;
     if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
       targetUrl = `https://${targetUrl}`;
@@ -442,6 +457,7 @@ async function startServer() {
                 if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
                   if (response.url().includes(capture.network.urlIncludes)) {
                     primaryNetworkJson = json;
+                    primaryNetworkMatchedUrl = response.url();
                     console.log(`[NETWORK CAPTURE] Successfully intercepted target URL: ${response.url()}`);
                   }
                 }
@@ -661,6 +677,7 @@ async function startServer() {
           if (interceptedResponse) {
             try {
               primaryNetworkJson = await interceptedResponse.json();
+              primaryNetworkMatchedUrl = interceptedResponse.url();
               console.log(`[NETWORK CAPTURE] Successfully evaluated and saved intercept response.`);
             } catch (e) {
               console.warn(`[NETWORK CAPTURE] Failed to parse intercepted JSON: ${e}`);
@@ -744,15 +761,28 @@ async function startServer() {
         // Format final JSON payload including target `primarySource` network data
         let finalJsonPayload: any = undefined;
         if (actualFormats.includes("json") || capture?.primarySource === 'network') {
-          finalJsonPayload = interceptedJson;
           if (capture?.primarySource === 'network') {
             finalJsonPayload = {
               primarySource: 'network',
-              primary: primaryNetworkJson,
-              matchedUrl: primaryNetworkMatchedUrl,
-              intercepted: interceptedJson
+              primary: primaryNetworkJson
             };
+            if (includeInterceptedResponses) {
+              finalJsonPayload.intercepted = interceptedJson;
+            }
+          } else {
+            finalJsonPayload = interceptedJson;
           }
+        }
+
+        if (capture?.primarySource === 'network') {
+          return res.json({
+            ok: true,
+            success: true,
+            url: targetUrl,
+            title: finalTitle,
+            matchedUrl: primaryNetworkMatchedUrl,
+            json: finalJsonPayload
+          });
         }
 
         return res.json({
