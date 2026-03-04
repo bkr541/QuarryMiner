@@ -12,6 +12,15 @@ import TurndownService from "turndown";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
+// Apply fetch polyfill for Node.js environments
+import fetch, { Headers, Request, Response } from 'node-fetch';
+if (!globalThis.fetch) {
+  (globalThis as any).fetch = fetch;
+  (globalThis as any).Headers = Headers;
+  (globalThis as any).Request = Request;
+  (globalThis as any).Response = Response;
+}
+
 dotenv.config({ path: [".env.local", ".env"] });
 
 const supabaseUrl = process.env.SUPABASE_URL || "http://localhost:54321"; // Dummy local fallback
