@@ -6,6 +6,7 @@ export interface Environment {
     id: string;
     user_id: string;
     name: string;
+    slug: string | null;
     match_host: string;
     match_type: MatchType;
     match_path_regex: string | null;

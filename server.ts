@@ -124,9 +124,12 @@ async function startServer() {
     try {
       const payload = { ...req.body, user_id: req.userId };
 
-      // Clean up empty UUIDs
+      // Clean up empty fields
       if (payload.proxy_profile_id === "") {
         payload.proxy_profile_id = null;
+      }
+      if (payload.slug === "") {
+        payload.slug = null;
       }
 
       const { data, error } = await supabase
@@ -147,9 +150,12 @@ async function startServer() {
     try {
       const payload = { ...req.body };
 
-      // Clean up empty UUIDs
+      // Clean up empty fields
       if (payload.proxy_profile_id === "") {
         payload.proxy_profile_id = null;
+      }
+      if (payload.slug === "") {
+        payload.slug = null;
       }
 
       const { data, error } = await supabase

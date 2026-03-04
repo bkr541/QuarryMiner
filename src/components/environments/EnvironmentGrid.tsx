@@ -112,6 +112,10 @@ export const EnvironmentGrid: React.FC<EnvironmentGridProps> = ({ environments, 
                                 </span>
                             )}
                         </h4>
+                        <div className="text-[11px] font-mono text-[#A1A1AA] mb-1 flex items-center gap-1.5 line-clamp-1">
+                            <span className="shrink-0">Slug:</span>
+                            <span className="text-[#E4E3E0] truncate bg-[#2A2A2A] px-1.5 py-0.5 rounded border border-[#3A3A3A]">{env.slug || 'N/A'}</span>
+                        </div>
                         <div className="text-[11px] font-mono text-[#A1A1AA] mb-3 flex items-center gap-1.5 line-clamp-1">
                             <span className="shrink-0">Host:</span>
                             <span className="text-[#E4E3E0] truncate">{env.match_host}</span>

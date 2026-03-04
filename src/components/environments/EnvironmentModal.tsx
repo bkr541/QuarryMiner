@@ -18,6 +18,7 @@ export const EnvironmentModal: React.FC<EnvironmentModalProps> = ({
     const isEdit = !!initialData;
     const [formData, setFormData] = useState<Partial<Environment>>({
         name: '',
+        slug: '',
         match_host: '',
         match_type: 'exact',
         match_path_regex: '',
@@ -55,6 +56,7 @@ export const EnvironmentModal: React.FC<EnvironmentModalProps> = ({
             } else {
                 setFormData({
                     name: '',
+                    slug: '',
                     match_host: '',
                     match_type: 'exact',
                     match_path_regex: '',
@@ -146,6 +148,22 @@ export const EnvironmentModal: React.FC<EnvironmentModalProps> = ({
                                 placeholder="Prod Webapp - US-East"
                             />
                         </div>
+                        <div>
+                            <label className="text-xs font-mono uppercase mb-2 block text-[#A1A1AA] tracking-wider font-bold">Environment Slug</label>
+                            <input
+                                required
+                                type="text"
+                                maxLength={10}
+                                value={formData.slug || ''}
+                                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                                className="w-full bg-[#1A1A1A] border border-[#333333] p-3 text-sm focus:outline-none focus:border-[#D95D39] text-[#E4E3E0] rounded-xl transition-colors"
+                                placeholder="prod-us"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Row 1.5 */}
+                    <div className="grid grid-cols-1 gap-6">
                         <div>
                             <label className="text-xs font-mono uppercase mb-2 block text-[#A1A1AA] tracking-wider font-bold">Match Host</label>
                             <input
