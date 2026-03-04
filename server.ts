@@ -9,6 +9,21 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
 import TurndownService from "turndown";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+
+dotenv.config({ path: [".env.local", ".env"] });
+
+const supabaseUrl = process.env.SUPABASE_URL || "http://localhost:54321"; // Dummy local fallback
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "dummy-key";
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Extend Express Request
+declare module 'express-serve-static-core' {
+  interface Request {
+    userId?: string;
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +57,109 @@ async function startServer() {
 
   app.use(cors());
   app.use(express.json());
+
+  // Dummy Auth Middleware: stub user_id since auth isn't in place yet
+  app.use((req, res, next) => {
+    // In a real app this would parse JWT/sessions from req.headers.authorization
+    req.userId = "00000000-0000-0000-0000-000000000000"; // Dummy UUID for constraint satisfaction
+    next();
+  });
+
+  // --- Environments API ---
+
+  // List environments
+  app.get("/api/environments", async (req, res) => {
+    try {
+      const { search = '', sort = 'created_at', order = 'desc', matchType } = req.query;
+      let query = supabase
+        .from('environments')
+        .select('*')
+        .eq('user_id', req.userId);
+
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,match_host.ilike.%${search}%`);
+      }
+      if (matchType && matchType !== 'All') {
+        // Assume 'All' means no filter, otherwise exact match for match_type enum
+        query = query.eq('match_type', (matchType as string).toLowerCase());
+      }
+
+      const { data, error } = await query.order(sort as string, { ascending: order === 'asc' });
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get single environment
+  app.get("/api/environments/:id", async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('environments')
+        .select('*')
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId)
+        .single();
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Create environment
+  app.post("/api/environments", async (req, res) => {
+    try {
+      const payload = { ...req.body, user_id: req.userId };
+      const { data, error } = await supabase
+        .from('environments')
+        .insert([payload])
+        .select()
+        .single();
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Update environment
+  app.patch("/api/environments/:id", async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('environments')
+        .update(req.body)
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId)
+        .select()
+        .single();
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Delete environment
+  app.delete("/api/environments/:id", async (req, res) => {
+    try {
+      const { error } = await supabase
+        .from('environments')
+        .delete()
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId);
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // API Route for scraping
   app.post("/api/scrape", async (req, res) => {

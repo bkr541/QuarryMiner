@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { extractStructuredData } from "./services/geminiService";
+import { EnvironmentPage } from "./components/environments/EnvironmentPage";
 
 // --- Schema Visual Editor Components ---
 
@@ -437,7 +438,7 @@ export default function App() {
   const [leftPanelWidth, setLeftPanelWidth] = useState(450);
   const [isResizing, setIsResizing] = useState(false);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
-  const [activePage, setActivePage] = useState<'scrape' | 'dashboard'>('scrape');
+  const [activePage, setActivePage] = useState<'scrape' | 'dashboard' | 'environment'>('scrape');
 
   const startResizing = React.useCallback((e: React.MouseEvent) => {
     setIsResizing(true);
@@ -678,14 +679,14 @@ export default function App() {
                   <button
                     key={item.id}
                     onClick={() => {
-                      if (item.id === 'dashboard' || item.id === 'scrape') {
+                      if (item.id === 'dashboard' || item.id === 'scrape' || item.id === 'environment') {
                         setActivePage(item.id as any);
                         setIsSideMenuOpen(false);
                       }
                     }}
                     className={`w-full flex items-center gap-4 px-4 py-3 rounded-md transition-all group ${activePage === item.id
-                        ? 'bg-[#222222] text-[#D95D39]'
-                        : 'hover:bg-[#222222] text-[#A1A1AA] hover:text-[#E4E3E0]'
+                      ? 'bg-[#222222] text-[#D95D39]'
+                      : 'hover:bg-[#222222] text-[#A1A1AA] hover:text-[#E4E3E0]'
                       }`}
                   >
                     <item.icon size={18} className={activePage === item.id ? '' : 'group-hover:scale-110 transition-transform'} />
@@ -733,6 +734,8 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden">
         {activePage === 'dashboard' ? (
           <Dashboard />
+        ) : activePage === 'environment' ? (
+          <EnvironmentPage />
         ) : (
           <>
             {/* Left Panel: Configuration */}
@@ -802,8 +805,8 @@ export default function App() {
                                     )
                                   }}
                                   className={`px-3 py-1.5 text-[10px] font-mono uppercase border transition-all rounded-md ${formats.includes(f)
-                                      ? 'bg-gradient-to-r from-[#D95D39] to-[#E87A5D] border-transparent text-white shadow-md shadow-[#D95D39]/20'
-                                      : 'bg-[#181818] border-[#333333] text-[#A1A1AA] hover:border-[#D95D39] hover:text-[#E4E3E0]'
+                                    ? 'bg-gradient-to-r from-[#D95D39] to-[#E87A5D] border-transparent text-white shadow-md shadow-[#D95D39]/20'
+                                    : 'bg-[#181818] border-[#333333] text-[#A1A1AA] hover:border-[#D95D39] hover:text-[#E4E3E0]'
                                     }`}
                                 >
                                   {f}
