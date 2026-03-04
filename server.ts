@@ -341,7 +341,11 @@ async function startServer() {
       }
     }
 
-    const maxRetries = 5;
+    let maxRetries = 5;
+    if (capture?.primarySource === 'network') {
+      maxRetries = 1; // Explicitly stop network captures from retrying on logic failures
+    }
+
     let attempt = 0;
     let lastError = null;
 
@@ -517,17 +521,108 @@ async function startServer() {
 
         console.log(`Scraping Attempt ${attempt}: ${targetUrl}`);
 
-        let response;
+        let response: any = null;
+        let pageError: string | null = null;
+        let interceptedResponsePromise: Promise<any> | null = null;
+
         if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
           console.log(`[NETWORK CAPTURE] Setting up waitForResponse for: ${capture.network.urlIncludes}`);
-          const [interceptedResponse, navigationResponse] = await Promise.all([
-            page.waitForResponse(res => res.url().includes(capture.network.urlIncludes) && res.status() >= 200 && res.status() <= 299, { timeout: 60000 }).catch(e => {
-              console.warn(`[NETWORK CAPTURE] Failed to intercept URL within timeout: ${e.message}`);
-              return null;
-            }),
-            page.goto(targetUrl, { waitUntil: "commit", timeout: 60000 })
-          ]);
-          response = navigationResponse;
+          // Fire explicitly in background
+          interceptedResponsePromise = page.waitForResponse(res => res.url().includes(capture.network.urlIncludes!) && res.status() >= 200 && res.status() <= 299, { timeout: 45000 }).catch(e => {
+            console.warn(`[NETWORK CAPTURE] Failed to intercept URL within timeout: ${e.message}`);
+            return null;
+          });
+        }
+
+        response = await page.goto(targetUrl, {
+          waitUntil: "commit",
+          timeout: 45000
+        }).catch(e => {
+          pageError = e.message;
+          return null;
+        });
+
+        console.log(`[STEALTH] page.goto completed for attempt ${attempt}`);
+
+        if (response && (response.status() === 403 || response.status() === 429)) {
+          console.warn(`[BLOCK] Received ${response.status()} status code. Attempting in-place solve...`);
+        }
+
+        try {
+          await solvePressAndHold();
+        } catch (e: any) {
+          console.warn(`[STEALTH] solvePressAndHold skipped: ${e.message}`);
+        }
+
+        let content = "";
+        try {
+          content = await page.content();
+        } catch (e: any) {
+          pageError = pageError || e.message;
+          console.warn(`[STEALTH] Failed to read page.content(): ${e.message}`);
+        }
+
+        const title = await page.title().catch(() => "");
+
+        const blockPatterns = [
+          "Access to this page has been denied",
+          "px-captcha",
+          "Verify you are human",
+          "Cloudflare",
+          "unusual activity from your computer network",
+          "Please verify you are a human",
+          "Checking your browser before accessing",
+          "Pardon Our Interruption",
+          "Are you a human?",
+          "Request blocked",
+          "Access Denied"
+        ];
+
+        let matchedMarkers = blockPatterns.filter(pattern => content.includes(pattern) || title.includes(pattern));
+
+        if (pageError && (pageError.includes("ERR_ABORTED") || pageError.includes("403"))) {
+          matchedMarkers.push("ERR_ABORTED/403");
+        }
+
+        // Only append the HTTP status if the text markers ALSO triggered.
+        // Otherwise, successful bypassed solves will incorrectly trip a failure since 'response' points to the initial 403 load!
+        if (response && (response.status() === 403 || response.status() === 429) && matchedMarkers.length > 0) {
+          matchedMarkers.push(`HTTP ${response.status()}`);
+        }
+
+        if (matchedMarkers.length > 0) {
+          console.warn(`[BLOCK] Bot detected on attempt ${attempt}. Markers: ${matchedMarkers.join(', ')}`);
+
+          let screenshotBase64 = "";
+          try {
+            screenshotBase64 = await page.screenshot({ fullPage: true, type: 'png' }).then(b => b.toString('base64'));
+          } catch (e) { /* ignore */ }
+
+          const htmlSnippet = content.substring(0, 3000);
+
+          await browser.close();
+
+          return res.status(200).json({
+            ok: false,
+            success: false,
+            errorType: "bot_detection",
+            message: "Bot detection blocked access",
+            diagnostics: {
+              urlRequested: targetUrl,
+              finalUrl: page.url(),
+              title,
+              statusHint: `challenge/blocked`,
+              detectedMarkers: matchedMarkers,
+              screenshotBase64,
+              htmlSnippet
+            }
+          });
+        }
+
+        // If we survived the block logic, NOW wait for the network interceptor if applicable!
+        if (interceptedResponsePromise) {
+          console.log(`[NETWORK CAPTURE] Awaiting background intercept response...`);
+          const interceptedResponse = await interceptedResponsePromise;
           if (interceptedResponse) {
             try {
               primaryNetworkJson = await interceptedResponse.json();
@@ -536,52 +631,30 @@ async function startServer() {
               console.warn(`[NETWORK CAPTURE] Failed to parse intercepted JSON: ${e}`);
             }
           }
-        } else {
-          response = await page.goto(targetUrl, {
-            waitUntil: "commit",
-            timeout: 60000
+        }
+
+        if (capture?.primarySource === 'network' && !primaryNetworkJson) {
+          let screenshotBase64 = "";
+          try {
+            screenshotBase64 = await page.screenshot({ fullPage: true, type: 'png' }).then(b => b.toString('base64'));
+          } catch (e) { /* ignore */ }
+
+          await browser.close();
+          return res.status(200).json({
+            ok: false,
+            success: false,
+            errorType: "network_timeout",
+            message: "Target network request was not intercepted within the timeout period.",
+            diagnostics: {
+              urlRequested: targetUrl,
+              finalUrl: page.url(),
+              title,
+              statusHint: "timeout",
+              detectedMarkers: [],
+              screenshotBase64,
+              htmlSnippet: content.substring(0, 3000)
+            }
           });
-        }
-        console.log(`[STEALTH] page.goto completed for attempt ${attempt}`);
-
-        if (response && (response.status() === 403 || response.status() === 429)) {
-          console.warn(`[BLOCK] Received ${response.status()} status code. Attempting in-place solve...`);
-        }
-
-        await solvePressAndHold();
-        await page.waitForTimeout(5000 + Math.random() * 5000);
-
-        let content = await page.content();
-
-        const isBlocked = () => {
-          const blockPatterns = [
-            "Access to this page has been denied",
-            "px-captcha",
-            "Verify you are human",
-            "Cloudflare",
-            "unusual activity from your computer network",
-            "Please verify you are a human",
-            "Checking your browser before accessing",
-            "Pardon Our Interruption",
-            "Are you a human?"
-          ];
-          return blockPatterns.some(pattern => content.includes(pattern));
-        };
-
-        if (isBlocked()) {
-          console.warn(`[BLOCK] Bot detected on attempt ${attempt}. Trying to solve...`);
-          await solvePressAndHold();
-          await page.waitForTimeout(5000);
-          content = await page.content();
-
-          if (isBlocked()) {
-            console.warn(`[BLOCK] Still blocked. Retrying with new session...`);
-            await browser.close();
-            await new Promise(r => setTimeout(r, attempt * 7000));
-            continue;
-          } else {
-            console.log("[STEALTH] Successfully bypassed block.");
-          }
         }
 
         // Handle Infinite Scroll
@@ -666,7 +739,7 @@ async function startServer() {
       }
     }
 
-    const errorMessage = `Failed after ${maxRetries} attempts. Last error: ${lastError?.message || "Bot detection blocked access"}`;
+    const errorMessage = lastError?.message || "Bot detection blocked access";
 
     // Save failed run to database
     try {
@@ -682,6 +755,24 @@ async function startServer() {
       }]);
     } catch (dbErr) {
       console.error("Failed to log failed run to db:", dbErr);
+    }
+
+    // Check if this was a manually thrown logic block for bot detection
+    if (errorMessage === "Bot detection blocked access") {
+      return res.status(200).json({
+        ok: false,
+        errorType: "bot_detection",
+        message: errorMessage,
+        diagnostics: {
+          urlRequested: targetUrl,
+          finalUrl: targetUrl,
+          title: "Access Denied",
+          statusHint: "challenge/blocked",
+          detectedMarkers: [],
+          screenshotBase64: "", // Missing since Playwright instance is already closed in the try/catch loop
+          htmlSnippet: ""
+        }
+      });
     }
 
     res.status(500).json({ error: errorMessage });
