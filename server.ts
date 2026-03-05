@@ -11,6 +11,7 @@ import { execSync } from "child_process";
 import TurndownService from "turndown";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
+import crypto from "crypto";
 
 // Apply fetch polyfill for Node.js environments
 import fetch, { Headers, Request, Response } from 'node-fetch';
@@ -384,11 +385,45 @@ async function startServer() {
   });
 
   // API Route for scraping
-  app.post("/api/scrape", async (req, res) => {
-    const { url, waitSelector, scrollCount = 0, formats = ["HTML", "JSON"], capture } = req.body;
+
+  // --- Crypto & Cache Helpers ---
+  function generateApiKey() {
+    return "qm_" + crypto.randomBytes(24).toString('base64url');
+  }
+
+  function hashApiKey(plaintext: string) {
+    return crypto.createHash('sha256').update(plaintext).digest('hex');
+  }
+
+  function verifyApiKey(plaintext: string, storedHash: string) {
+    const hash = hashApiKey(plaintext);
+    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(storedHash, 'hex'));
+  }
+
+  function generateCacheKey(apiEndpointId: string, params: any) {
+    const normalized: any = {};
+    if (params) {
+      Object.keys(params).sort().forEach(k => {
+        let val = params[k];
+        if (typeof val === 'string') {
+          val = val.trim();
+          if ((k === 'o' || k === 'd' || k === 'origin' || k === 'destination') && val.length === 3) {
+            val = val.toUpperCase();
+          }
+        }
+        normalized[k] = val;
+      });
+    }
+    const paramsStr = JSON.stringify(normalized);
+    return crypto.createHash('sha256').update(apiEndpointId + ':' + paramsStr).digest('hex');
+  }
+
+  // --- Internal Scrape Runner ---
+  async function runScrapeInternal(args: any) {
+    const { url, waitSelector, scrollCount = 0, formats = ["HTML", "JSON"], capture } = args;
 
     if (!url) {
-      return res.status(400).json({ error: "URL is required" });
+      return { status: 400, body: { error: "URL is required" } };
     }
 
     let includeInterceptedResponses = false;
@@ -553,6 +588,7 @@ async function startServer() {
         };
 
         // Helper to solve "Press and Hold" if detected
+        // Helper to solve "Press and Hold" if detected
         const solvePressAndHold = async () => {
           const pressAndHoldSelectors = [
             "#px-captcha",
@@ -561,40 +597,57 @@ async function startServer() {
             "div[id*='captcha']",
             "button[id*='press']",
             ".px-captcha-container",
-            "div[aria-label*='Press and Hold']"
+            "div[aria-label*='Press and Hold']",
+            "#challenge-stage",
+            ".ctp-checkbox-label"
           ];
 
-          for (const selector of pressAndHoldSelectors) {
-            try {
-              const element = await page.$(selector);
-              if (element && await element.isVisible()) {
-                console.log(`[STEALTH] Detected potential Challenge: ${selector}`);
+          // Poll periodically for up to 15 seconds waiting for the CAPTCHA to appear
+          for (let attempt = 0; attempt < 15; attempt++) {
+            const frames = page.frames();
 
-                const box = await element.boundingBox();
-                if (box) {
-                  const x = box.x + box.width / 2 + (Math.random() * 20 - 10);
-                  const y = box.y + box.height / 2 + (Math.random() * 20 - 10);
+            for (const frame of frames) {
+              for (const selector of pressAndHoldSelectors) {
+                try {
+                  const element = await frame.$(selector);
+                  if (element && await element.isVisible()) {
+                    console.log(`[STEALTH] Detected potential Challenge in frame: ${selector}`);
 
-                  await moveMouseHumanLike(x, y);
-                  await page.mouse.down();
+                    // Wait for the iframe's internal JS to fully initialize and attach its event listeners before clicking
+                    await page.waitForTimeout(3000);
 
-                  // Hold with "jitter" and "wiggle"
-                  const holdDuration = 5000 + Math.random() * 3000;
-                  const intervals = 10;
-                  for (let i = 0; i < intervals; i++) {
-                    await page.waitForTimeout(holdDuration / intervals);
-                    await page.mouse.move(x + (Math.random() * 4 - 2), y + (Math.random() * 4 - 2));
+                    // native Playwright boundingBox inside an iframe already returns main-frame relative coords
+                    const box = await element.boundingBox();
+                    if (box) {
+                      const x = box.x + box.width / 2 + (Math.random() * 20 - 10);
+                      const y = box.y + box.height / 2 + (Math.random() * 20 - 10);
+
+                      // Move mouse naturally
+                      await moveMouseHumanLike(x, y);
+                      await page.mouse.down();
+
+                      // Hold with "jitter" and "wiggle" to spoof human biometrics
+                      const holdDuration = 6000 + Math.random() * 4000;
+                      const intervals = 15;
+                      for (let i = 0; i < intervals; i++) {
+                        await page.waitForTimeout(holdDuration / intervals);
+                        // jiggle 1-2 pixels
+                        await page.mouse.move(x + (Math.random() * 4 - 2), y + (Math.random() * 4 - 2));
+                      }
+
+                      await page.mouse.up();
+                      console.log(`[STEALTH] Solved ${selector}, waiting for validation...`);
+                      await page.waitForTimeout(8000);
+                      return true;
+                    }
                   }
-
-                  await page.mouse.up();
-                  console.log(`[STEALTH] Solved ${selector}, waiting for validation...`);
-                  await page.waitForTimeout(7000);
-                  return true;
+                } catch (e) {
+                  // Ignore frame-specific errors
                 }
               }
-            } catch (e) {
-              // Ignore
             }
+            // Wait 1 second before checking again
+            await page.waitForTimeout(1000);
           }
           return false;
         };
@@ -610,8 +663,8 @@ async function startServer() {
 
         if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
           console.log(`[NETWORK CAPTURE] Setting up waitForResponse for: ${capture.network.urlIncludes}`);
-          // Fire explicitly in background
-          interceptedResponsePromise = page.waitForResponse(res => res.url().includes(capture.network.urlIncludes!) && res.status() >= 200 && res.status() <= 299, { timeout: 45000 }).catch(e => {
+          // Fire explicitly in background with 90s timeout to survive Stealth solves
+          interceptedResponsePromise = page.waitForResponse(res => res.url().includes(capture.network.urlIncludes!) && res.status() >= 200 && res.status() <= 299, { timeout: 90000 }).catch(e => {
             console.warn(`[NETWORK CAPTURE] Failed to intercept URL within timeout: ${e.message}`);
             return null;
           });
@@ -619,7 +672,7 @@ async function startServer() {
 
         response = await page.goto(targetUrl, {
           waitUntil: "commit",
-          timeout: 45000
+          timeout: 60000
         }).catch(e => {
           pageError = e.message;
           return null;
@@ -631,10 +684,17 @@ async function startServer() {
           console.warn(`[BLOCK] Received ${response.status()} status code. Attempting in-place solve...`);
         }
 
+        let didSolve = false;
         try {
-          await solvePressAndHold();
+          didSolve = await solvePressAndHold();
         } catch (e: any) {
           console.warn(`[STEALTH] solvePressAndHold skipped: ${e.message}`);
+        }
+
+        // If we actively solved a captcha, wait briefly to allow the page to visibly navigate to the target data state.
+        if (didSolve) {
+          console.log(`[STEALTH] Captcha visibly solved. Waiting for SPA routing to stabilize...`);
+          await page.waitForTimeout(5000);
         }
 
         let content = "";
@@ -685,21 +745,23 @@ async function startServer() {
 
           await browser.close();
 
-          return res.status(200).json({
-            ok: false,
-            success: false,
-            errorType: "bot_detection",
-            message: "Bot detection blocked access",
-            diagnostics: {
-              urlRequested: targetUrl,
-              finalUrl: page.url(),
-              title,
-              statusHint: `challenge/blocked`,
-              detectedMarkers: matchedMarkers,
-              screenshotBase64,
-              htmlSnippet
+          return {
+            status: 200, body: {
+              ok: false,
+              success: false,
+              errorType: "bot_detection",
+              message: "Bot detection blocked access",
+              diagnostics: {
+                urlRequested: targetUrl,
+                finalUrl: page.url(),
+                title,
+                statusHint: `challenge/blocked`,
+                detectedMarkers: matchedMarkers,
+                screenshotBase64,
+                htmlSnippet
+              }
             }
-          });
+          };
         }
 
         // If we survived the block logic, NOW wait for the network interceptor if applicable!
@@ -724,21 +786,23 @@ async function startServer() {
           } catch (e) { /* ignore */ }
 
           await browser.close();
-          return res.status(200).json({
-            ok: false,
-            success: false,
-            errorType: "network_timeout",
-            message: "Target network request was not intercepted within the timeout period.",
-            diagnostics: {
-              urlRequested: targetUrl,
-              finalUrl: page.url(),
-              title,
-              statusHint: "timeout",
-              detectedMarkers: [],
-              screenshotBase64,
-              htmlSnippet: content.substring(0, 3000)
+          return {
+            status: 200, body: {
+              ok: false,
+              success: false,
+              errorType: "network_timeout",
+              message: "Target network request was not intercepted within the timeout period.",
+              diagnostics: {
+                urlRequested: targetUrl,
+                finalUrl: page.url(),
+                title,
+                statusHint: "timeout",
+                detectedMarkers: [],
+                screenshotBase64,
+                htmlSnippet: content.substring(0, 3000)
+              }
             }
-          });
+          };
         }
 
         // Handle Infinite Scroll
@@ -776,7 +840,7 @@ async function startServer() {
         // Save successful run to database
         try {
           await supabase.from('scraping_runs').insert([{
-            user_id: req.userId,
+            user_id: args.userId,
             url: targetUrl,
             status: 'success',
             metadata: {
@@ -807,28 +871,32 @@ async function startServer() {
         }
 
         if (capture?.primarySource === 'network') {
-          return res.json({
-            ok: true,
-            success: true,
-            url: targetUrl,
-            title: finalTitle,
-            matchedUrl: primaryNetworkMatchedUrl,
-            json: finalJsonPayload
-          });
+          return {
+            status: 200, body: {
+              ok: true,
+              success: true,
+              url: targetUrl,
+              title: finalTitle,
+              matchedUrl: primaryNetworkMatchedUrl,
+              json: finalJsonPayload
+            }
+          };
         }
 
-        return res.json({
-          ok: true,
-          success: true,
-          json: finalJsonPayload,
-          data: {
-            url: targetUrl,
-            title: finalTitle,
-            html: actualFormats.includes("html") ? finalContent : undefined,
-            markdown: actualFormats.includes("markdown") ? markdown : undefined,
+        return {
+          status: 200, body: {
+            ok: true,
+            success: true,
             json: finalJsonPayload,
+            data: {
+              url: targetUrl,
+              title: finalTitle,
+              html: actualFormats.includes("html") ? finalContent : undefined,
+              markdown: actualFormats.includes("markdown") ? markdown : undefined,
+              json: finalJsonPayload,
+            }
           }
-        });
+        };
       } catch (error: any) {
         if (browser) await browser.close();
         console.error(`Attempt ${attempt} failed:`, error.message);
@@ -841,7 +909,7 @@ async function startServer() {
     // Save failed run to database
     try {
       await supabase.from('scraping_runs').insert([{
-        user_id: req.userId,
+        user_id: args.userId,
         url: targetUrl,
         status: 'failed',
         error_message: errorMessage,
@@ -856,23 +924,378 @@ async function startServer() {
 
     // Check if this was a manually thrown logic block for bot detection
     if (errorMessage === "Bot detection blocked access") {
-      return res.status(200).json({
-        ok: false,
-        errorType: "bot_detection",
-        message: errorMessage,
-        diagnostics: {
-          urlRequested: targetUrl,
-          finalUrl: targetUrl,
-          title: "Access Denied",
-          statusHint: "challenge/blocked",
-          detectedMarkers: [],
-          screenshotBase64: "", // Missing since Playwright instance is already closed in the try/catch loop
-          htmlSnippet: ""
+      return {
+        status: 200, body: {
+          ok: false,
+          errorType: "bot_detection",
+          message: errorMessage,
+          diagnostics: {
+            urlRequested: targetUrl,
+            finalUrl: targetUrl,
+            title: "Access Denied",
+            statusHint: "challenge/blocked",
+            detectedMarkers: [],
+            screenshotBase64: "", // Missing since Playwright instance is already closed in the try/catch loop
+            htmlSnippet: ""
+          }
         }
-      });
+      };
     }
 
-    res.status(500).json({ error: errorMessage });
+    return { status: 500, body: { error: errorMessage } };
+
+  }
+
+  app.post("/api/scrape", async (req, res) => {
+    const { url, waitSelector, scrollCount = 0, formats = ["HTML", "JSON"], capture } = req.body;
+    const result = await runScrapeInternal({
+      url, waitSelector, scrollCount, formats, capture, userId: req.userId
+    });
+    res.status(result.status || 200).json(result.body);
+  });
+
+
+
+
+  // --- Admin API Endpoints for Cache-Backed Data ---
+  app.post("/api/v1/admin/endpoints", async (req, res) => {
+    try {
+      const { env_slug, resource, cache_ttl_seconds = 3600, request_template, response_template = null, enabled = true, require_api_key = true } = req.body;
+      const plaintextKey = generateApiKey();
+      const api_key_hash = hashApiKey(plaintextKey);
+
+      const { data, error } = await supabase
+        .from('api_endpoints')
+        .insert([{
+          user_id: req.userId,
+          env_slug,
+          resource,
+          cache_ttl_seconds,
+          request_template,
+          response_template,
+          enabled,
+          require_api_key,
+          api_key_hash
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      res.json({ success: true, data, apiKey: plaintextKey });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/v1/admin/endpoints", async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('api_endpoints')
+        .select('*')
+        .eq('user_id', req.userId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/v1/admin/endpoints/:id/rotate_key", async (req, res) => {
+    try {
+      const plaintextKey = generateApiKey();
+      const api_key_hash = hashApiKey(plaintextKey);
+      const { data, error } = await supabase
+        .from('api_endpoints')
+        .update({ api_key_hash })
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId)
+        .select()
+        .single();
+      if (error) throw error;
+      res.json({ success: true, data, apiKey: plaintextKey });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+  app.patch("/api/v1/admin/endpoints/:id", async (req, res) => {
+    try {
+      const { enabled, cache_ttl_seconds, require_api_key, request_template, response_template, resource, env_slug } = req.body;
+
+      const updateData: any = {};
+      if (enabled !== undefined) updateData.enabled = enabled;
+      if (cache_ttl_seconds !== undefined) updateData.cache_ttl_seconds = cache_ttl_seconds;
+      if (require_api_key !== undefined) updateData.require_api_key = require_api_key;
+      if (request_template !== undefined) updateData.request_template = request_template;
+      if (response_template !== undefined) updateData.response_template = response_template;
+      if (resource !== undefined) updateData.resource = resource;
+      if (env_slug !== undefined) updateData.env_slug = env_slug;
+
+      const { data, error } = await supabase
+        .from('api_endpoints')
+        .update(updateData)
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+
+  // --- Consumer Data API ---
+  app.get("/api/v1/data/:env_slug/:resource", async (req, res) => {
+    try {
+      const { env_slug, resource } = req.params;
+      const queryParams = req.query as Record<string, any>;
+      const providedKey = req.headers['x-api-key'] as string;
+
+      // 1. Lookup endpoint
+      const { data: endpoint, error: epError } = await supabase
+        .from('api_endpoints')
+        .select('*')
+        .eq('user_id', req.userId)
+        .eq('env_slug', env_slug)
+        .eq('resource', resource)
+        .eq('enabled', true)
+        .single();
+
+      if (epError || !endpoint) {
+        return res.status(404).json({ ok: false, env: env_slug, resource, source: "fresh", params: queryParams, error: "Endpoint not found or disabled" });
+      }
+
+      // 2. verify API key
+      if (endpoint.require_api_key) {
+        if (!providedKey || !verifyApiKey(providedKey, endpoint.api_key_hash)) {
+          return res.status(401).json({ ok: false, env: env_slug, resource, source: "fresh", params: queryParams, error: "Unauthorized: Invalid or missing X-API-Key" });
+        }
+      }
+
+      // 3. Normalize & cache key
+      const cache_key = generateCacheKey(endpoint.id, queryParams);
+
+      // 5. Cache-aside Check
+      const { data: cached, error: cacheErr } = await supabase
+        .from('api_endpoint_cache')
+        .select('*')
+        .eq('cache_key', cache_key)
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle();
+
+      if (cached && cached.payload) {
+        return res.json({
+          ok: cached.status === 'success',
+          env: env_slug,
+          resource,
+          source: "cache",
+          fetchedAt: cached.fetched_at,
+          expiresAt: cached.expires_at,
+          params: queryParams,
+          data: cached.payload
+        });
+      }
+
+      // 6. Missing/Stale: Build request and Scrape
+      const scrapeArgs = { ...endpoint.request_template, userId: req.userId };
+      const { urlTemplate, defaults = {} } = endpoint.request_template || {};
+
+      if (!urlTemplate) {
+        return res.status(400).json({ ok: false, env: env_slug, resource, source: "fresh", params: queryParams, error: "Endpoint missing required urlTemplate" });
+      }
+
+      // Merge defaults with query params (query params override defaults)
+      const mergedParams = { ...defaults, ...queryParams };
+
+      // Normalizations
+      if (mergedParams.o) mergedParams.o = String(mergedParams.o).toUpperCase();
+      if (mergedParams.d) mergedParams.d = String(mergedParams.d).toUpperCase();
+      if (!mergedParams.ftype) mergedParams.ftype = 'GW';
+      if (!mergedParams.adt) mergedParams.adt = 1;
+
+      // Extract required tokens from urlTemplate and substitute
+      let computedUrl = urlTemplate;
+      const missingTokens: string[] = [];
+      const tokenRegex = /\{\{([^}]+)\}\}/g;
+
+      let match;
+      while ((match = tokenRegex.exec(urlTemplate)) !== null) {
+        const key = match[1];
+        if (mergedParams[key] === undefined || mergedParams[key] === null || mergedParams[key] === '') {
+          missingTokens.push(key);
+        } else {
+          // Replace ALL instances of this token
+          computedUrl = computedUrl.split(`{{${key}}}`).join(encodeURIComponent(String(mergedParams[key])));
+        }
+      }
+
+      if (missingTokens.length > 0) {
+        return res.status(400).json({ ok: false, env: env_slug, resource, source: "fresh", params: queryParams, error: `Missing required token(s) for URL template: ${missingTokens.join(', ')}` });
+      }
+
+      scrapeArgs.url = computedUrl;
+      console.log(`[API Data] Final computed URL for ${env_slug}/${resource}:`, computedUrl);
+
+      const scrapeResult = await runScrapeInternal(scrapeArgs);
+
+      let finalPayload = scrapeResult.body;
+      let isSuccess = scrapeResult.status >= 200 && scrapeResult.status < 300 && finalPayload.ok !== false;
+
+      // Extract from outer payload wrapper
+      if (isSuccess && finalPayload.json) {
+        finalPayload = finalPayload.json;
+      }
+
+      // Response shaping
+      if (isSuccess && endpoint.response_template) {
+        if (endpoint.response_template.mode === "primary_only") {
+          let fp: any = finalPayload;
+          let primary = fp.primary || fp;
+          if (endpoint.response_template.pick) {
+            const pickKey = endpoint.response_template.pick;
+            if (pickKey.endsWith('[0]')) {
+              const key = pickKey.replace('[0]', '');
+              primary = primary[key] && Array.isArray(primary[key]) ? primary[key][0] : primary[key];
+            } else {
+              primary = primary[pickKey];
+            }
+          }
+          finalPayload = primary;
+        }
+      }
+
+      // Clean intercepted payload
+      if (finalPayload && (finalPayload as any).intercepted) {
+        delete (finalPayload as any).intercepted;
+      }
+
+      const now = new Date();
+      const expires = new Date(now.getTime() + (endpoint.cache_ttl_seconds * 1000));
+
+      const cacheRow = {
+        api_endpoint_id: endpoint.id,
+        cache_key,
+        params: queryParams,
+        payload: finalPayload,
+        status: isSuccess ? 'success' : 'failed',
+        fetched_at: now.toISOString(),
+        expires_at: expires.toISOString(),
+      };
+
+      try {
+        await supabase.from('api_endpoint_cache').upsert(cacheRow, { onConflict: 'cache_key' });
+      } catch (upsertErr) {
+        console.error("Cache upsert error:", upsertErr);
+      }
+
+      if (!isSuccess) {
+        return res.status(scrapeResult.status || 500).json({
+          ok: false,
+          env: env_slug,
+          resource,
+          source: "fresh",
+          params: queryParams,
+          error: finalPayload.error || finalPayload.message || "Scrape failed"
+        });
+      }
+
+      return res.json({
+        ok: true,
+        env: env_slug,
+        resource,
+        source: "fresh",
+        fetchedAt: now.toISOString(),
+        expiresAt: expires.toISOString(),
+        params: queryParams,
+        data: finalPayload
+      });
+
+    } catch (err: any) {
+      res.status(500).json({ ok: false, env: req.params.env_slug, resource: req.params.resource, source: "fresh", params: req.query, error: err.message });
+    }
+  });
+
+
+
+  // --- Secrets Endpoints ---
+  app.get("/api/secrets", async (req, res) => {
+    try {
+      // Don't return the actual value for security, just the metadata
+      const { data, error } = await supabase
+        .from('secrets')
+        .select('id, name, created_at, updated_at')
+        .eq('user_id', req.userId)
+        .order('name');
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/secrets", async (req, res) => {
+    try {
+      const { name, value } = req.body;
+      if (!name || !value) {
+        return res.status(400).json({ success: false, error: "Name and Value are required." });
+      }
+
+      // Check for uniqueness
+      const { data: existing } = await supabase
+        .from('secrets')
+        .select('id')
+        .eq('user_id', req.userId)
+        .eq('name', name)
+        .maybeSingle();
+
+      if (existing) {
+        return res.status(400).json({ success: false, error: "A secret with this name already exists." });
+      }
+
+      const { data, error } = await supabase
+        .from('secrets')
+        .insert([{ user_id: req.userId, name, value }])
+        .select('id, name, created_at, updated_at')
+        .single();
+
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/secrets/:id/reveal", async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('secrets')
+        .select('value')
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId)
+        .single();
+      if (error) throw error;
+      res.json({ success: true, value: data.value });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete("/api/secrets/:id", async (req, res) => {
+    try {
+      const { error } = await supabase
+        .from('secrets')
+        .delete()
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId);
+
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // Catch-all to ensure unmatched /api routes return JSON, preventing fallback to Vite SPA handler

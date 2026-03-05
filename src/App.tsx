@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { extractStructuredData } from "./services/geminiService";
 import { EnvironmentPage } from "./components/environments/EnvironmentPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { ApiPage } from "./components/api/ApiPage";
 import { useScrapeConfigs } from "./hooks/useScrapeConfigs";
 import { useEnvironments } from "./hooks/useEnvironments";
 import { useScrapingRuns } from "./hooks/useScrapingRuns";
@@ -97,8 +98,9 @@ const CustomMultiSelect = ({ label, options, selected, onChange }: CustomMultiSe
           >
             <div className="max-h-60 overflow-y-auto w-full p-2 space-y-1">
               {options.map((option) => (
-                <label
+                <div
                   key={option}
+                  onClick={() => toggleOption(option)}
                   className={`flex items-center gap-3 w-full p-2 rounded-md cursor-pointer transition-colors ${selected.includes(option) ? 'bg-[#D95D39]/10' : 'hover:bg-[#222222]'}`}
                 >
                   <div className={`w-4 h-4 rounded-sm flex items-center justify-center border transition-colors ${selected.includes(option) ? 'bg-[#D95D39] border-[#D95D39]' : 'border-[#444444] bg-[#121212]'}`}>
@@ -107,7 +109,7 @@ const CustomMultiSelect = ({ label, options, selected, onChange }: CustomMultiSe
                   <span className={`text-[13px] ${selected.includes(option) ? 'text-[#E4E3E0] font-medium' : 'text-[#A1A1AA]'}`}>
                     {option}
                   </span>
-                </label>
+                </div>
               ))}
             </div>
           </motion.div>
@@ -605,7 +607,7 @@ export default function App() {
   const [leftPanelWidth, setLeftPanelWidth] = useState(450);
   const [isResizing, setIsResizing] = useState(false);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
-  const [activePage, setActivePage] = useState<'scrape' | 'dashboard' | 'environment' | 'settings'>('scrape');
+  const [activePage, setActivePage] = useState<'scrape' | 'dashboard' | 'environment' | 'settings' | 'api'>('scrape');
 
   const startResizing = React.useCallback((e: React.MouseEvent) => {
     setIsResizing(true);
@@ -899,7 +901,7 @@ export default function App() {
                   <button
                     key={item.id}
                     onClick={() => {
-                      if (item.id === 'dashboard' || item.id === 'scrape' || item.id === 'environment' || item.id === 'settings') {
+                      if (item.id === 'dashboard' || item.id === 'scrape' || item.id === 'environment' || item.id === 'settings' || item.id === 'api') {
                         setActivePage(item.id as any);
                         setIsSideMenuOpen(false);
                       }
@@ -958,6 +960,8 @@ export default function App() {
           <EnvironmentPage />
         ) : activePage === 'settings' ? (
           <SettingsPage />
+        ) : activePage === 'api' ? (
+          <ApiPage />
         ) : (
           <>
             {/* Left Panel: Configuration */}
