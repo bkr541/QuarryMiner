@@ -473,7 +473,7 @@ async function startServer() {
         const userAgent = new UserAgents({ deviceCategory: "desktop" }).toString();
 
         browser = await chromium.launch({
-          headless: true,
+          headless: false,
           args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
@@ -514,24 +514,28 @@ async function startServer() {
 
         if (actualFormats.includes("json") || capture?.primarySource === 'network') {
           page.on('response', async (response) => {
+            const url = response.url();
             const contentType = response.headers()['content-type'] || '';
+            const isFrontier = url.includes('flyfrontier.com');
+
+            if (isFrontier || contentType.includes('application/json')) {
+              console.log(`[NETWORK CAPTURE] Observed: [${response.status()}] ${url.substring(0, 120)} (${contentType})`);
+            }
+
             if (contentType.includes('application/json')) {
               try {
                 const json = await response.json();
-                interceptedJson.push({ url: response.url(), data: json });
+                interceptedJson.push({ url, data: json });
 
-                // If this is our targeted primary network interception point
+                // If we survived the block logic...
                 if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
-                  if (response.url().includes(capture.network.urlIncludes)) {
+                  if (url.includes(capture.network.urlIncludes)) {
                     primaryNetworkJson = json;
-                    primaryNetworkMatchedUrl = response.url();
-                    console.log(`[NETWORK CAPTURE] Successfully intercepted target URL: ${response.url()}`);
+                    primaryNetworkMatchedUrl = url;
+                    console.log(`[NETWORK CAPTURE] Successfully intercepted target URL: ${url}`);
                   }
                 }
-
-              } catch (e) {
-                // Ignore errors (e.g. 204 No Content)
-              }
+              } catch (e) { }
             }
           });
         }
@@ -599,7 +603,8 @@ async function startServer() {
             ".px-captcha-container",
             "div[aria-label*='Press and Hold']",
             "#challenge-stage",
-            ".ctp-checkbox-label"
+            ".ctp-checkbox-label",
+            "text='Access to this page has been denied'"
           ];
 
           // Poll periodically for up to 15 seconds waiting for the CAPTCHA to appear
@@ -652,6 +657,64 @@ async function startServer() {
           return false;
         };
 
+        const waitForLoadingBear = async (depth = 0) => {
+          if (depth > 2) return; // Prevent infinite refresh loops
+
+          const loadingPatterns = [
+            ".loading-image", // Frontier's bear
+            ".loading-spinner",
+            ".spinner",
+            "div[class*='Loading']",
+            "img[src*='loading']",
+            "img[src*='bear']",
+            "svg[class*='Loading']",
+            ".loading-icon"
+          ];
+
+          console.log(`[STEALTH] Checking for loading indicators (depth ${depth})...`);
+          for (let i = 0; i < 40; i++) { // Poll for up to 60 seconds
+            let foundLoading = false;
+            for (const selector of loadingPatterns) {
+              const elements = await page.$$(selector);
+              for (const el of elements) {
+                if (await el.isVisible()) {
+                  foundLoading = true;
+                  break;
+                }
+              }
+              if (foundLoading) break;
+            }
+
+            if (!foundLoading) {
+              // Also check for specific innerText patterns that imply loading
+              const bodyText = await page.evaluate(() => document.body ? document.body.innerText : "");
+              if (bodyText.includes("Finding the best fares") || bodyText.includes("Loading your results") || bodyText.includes("Just a moment")) {
+                foundLoading = true;
+              }
+            }
+
+            if (!foundLoading) {
+              console.log(`[STEALTH] No loading indicators found (at step ${i}).`);
+
+              const title = await page.title().catch(() => "");
+              const bodyText = await page.evaluate(() => document.body ? document.body.innerText : "");
+              if (title.includes("Access Denied") || (bodyText.length < 2000 && bodyText.includes("Access to this page has been denied"))) {
+                console.warn(`[STEALTH] Still on Access Denied page after "solve". Refreshing...`);
+                await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => { });
+                await page.waitForTimeout(5000);
+                return await waitForLoadingBear(depth + 1);
+              }
+
+              if (i > 0) await page.waitForTimeout(3000); // Small buffer after it disappears
+              return;
+            }
+
+            console.log(`[STEALTH] Loading screen active, waiting...`);
+            await page.waitForTimeout(1500);
+          }
+          console.log(`[STEALTH] Loading indicator polling finished.`);
+        };
+
         // Random delay to simulate human behavior
         await new Promise(r => setTimeout(r, 3000 + Math.random() * 4000));
 
@@ -662,12 +725,10 @@ async function startServer() {
         let interceptedResponsePromise: Promise<any> | null = null;
 
         if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
-          console.log(`[NETWORK CAPTURE] Setting up waitForResponse for: ${capture.network.urlIncludes}`);
-          // Fire explicitly in background with 90s timeout to survive Stealth solves
-          interceptedResponsePromise = page.waitForResponse(res => res.url().includes(capture.network.urlIncludes!) && res.status() >= 200 && res.status() <= 299, { timeout: 90000 }).catch(e => {
-            console.warn(`[NETWORK CAPTURE] Failed to intercept URL within timeout: ${e.message}`);
-            return null;
-          });
+          console.log(`[NETWORK CAPTURE] Monitoring all responses for: ${capture.network.urlIncludes}`);
+          // We won't use a strict background promise here anymore because 
+          // Frontier's long loading cycles can cause them to expire or miss the trigger.
+          // Instead, we will rely on checking the interceptedJson array periodically.
         }
 
         response = await page.goto(targetUrl, {
@@ -693,13 +754,54 @@ async function startServer() {
 
         // If we actively solved a captcha, wait briefly to allow the page to visibly navigate to the target data state.
         if (didSolve) {
-          console.log(`[STEALTH] Captcha visibly solved. Waiting for SPA routing to stabilize...`);
-          await page.waitForTimeout(5000);
+          console.log(`[STEALTH] Captcha solved. Navigating fresh to original URL to trigger flight data request...`);
+          await page.mouse.move(100 + Math.random() * 100, 100 + Math.random() * 100);
+          await page.waitForTimeout(2000);
+
+          // Navigate fresh so the SPA re-fires the flight data POST request from scratch
+          await page.goto(targetUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 60000,
+          }).catch((e: any) => {
+            console.warn(`[STEALTH] Fresh nav after solve had navigation error: ${e.message}`);
+          });
+
+          console.log(`[STEALTH] Fresh nav complete. Current URL: ${page.url()}`);
+          await waitForLoadingBear();
+          console.log(`[STEALTH] Loading finished, waiting for final intercept stabilization...`);
+
+          // Poll the interceptedJson array for the target request for up to 45s after loading finishes
+          if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
+            console.log(`[NETWORK CAPTURE] Actively polling for target JSON...`);
+            for (let i = 0; i < 45; i++) {
+              const matched = interceptedJson.find(ij => ij.url.includes(capture.network.urlIncludes!));
+              if (matched) {
+                primaryNetworkJson = matched.data;
+                primaryNetworkMatchedUrl = matched.url;
+                console.log(`[NETWORK CAPTURE] Found target JSON via polling at step ${i}`);
+                break;
+              }
+              // Secondary check for the loading indicators in case they reappear
+              const bodyText = await page.evaluate(() => document.body ? document.body.innerText : "");
+              if (bodyText.includes("Finding the best fares")) {
+                console.log(`[STEALTH] Still seeing "Finding the best fares" text...`);
+              }
+              await page.waitForTimeout(1000);
+            }
+          }
+
+          if (!primaryNetworkJson) {
+            await page.waitForTimeout(5000); // Final cooldown if still not found
+          }
         }
 
         let content = "";
+        let bodyText = "";
         try {
+          // Wait for body to at least exist
+          await page.waitForSelector('body', { timeout: 10000 }).catch(() => { });
           content = await page.content();
+          bodyText = await page.evaluate(() => document.body ? document.body.innerText : "");
         } catch (e: any) {
           pageError = pageError || e.message;
           console.warn(`[STEALTH] Failed to read page.content(): ${e.message}`);
@@ -709,7 +811,6 @@ async function startServer() {
 
         const blockPatterns = [
           "Access to this page has been denied",
-          "px-captcha",
           "Verify you are human",
           "Cloudflare",
           "unusual activity from your computer network",
@@ -721,16 +822,37 @@ async function startServer() {
           "Access Denied"
         ];
 
-        let matchedMarkers = blockPatterns.filter(pattern => content.includes(pattern) || title.includes(pattern));
+        let matchedMarkers = blockPatterns.filter(pattern => {
+          // If we solved a captcha, ignore "Access to this page has been denied" unless it's the ONLY thing on screen
+          if (didSolve && (pattern === "Access to this page has been denied" || pattern === "Access Denied")) {
+            // Only count as a block if the body text is REALLY short (just the error message)
+            return bodyText.length < 500 && bodyText.includes(pattern);
+          }
+          return bodyText.includes(pattern) || title.includes(pattern);
+        });
 
         if (pageError && (pageError.includes("ERR_ABORTED") || pageError.includes("403"))) {
           matchedMarkers.push("ERR_ABORTED/403");
         }
 
-        // Only append the HTTP status if the text markers ALSO triggered.
-        // Otherwise, successful bypassed solves will incorrectly trip a failure since 'response' points to the initial 403 load!
-        if (response && (response.status() === 403 || response.status() === 429) && matchedMarkers.length > 0) {
+        // Only append the HTTP status if the text markers ALSO triggered AND we didn't solve a captcha.
+        if (!didSolve && response && (response.status() === 403 || response.status() === 429) && matchedMarkers.length > 0) {
           matchedMarkers.push(`HTTP ${response.status()}`);
+        }
+
+        // If there's a network interceptor running, and we think we might be blocked, 
+        // give the interceptor a more generous grace period (20s) if we solve a captcha.
+        let networkSucceeded = false;
+        if (matchedMarkers.length > 0 && interceptedResponsePromise) {
+          const graceMs = didSolve ? 20000 : 10000;
+          console.log(`[STEALTH] Bot markers detected but network interceptor is active. Giving it ${graceMs / 1000}s grace period...`);
+          const gracePeriod = new Promise(resolve => setTimeout(() => resolve(null), graceMs));
+          const fastIntercept: any = await Promise.race([interceptedResponsePromise, gracePeriod]);
+          if (fastIntercept) {
+            console.log(`[STEALTH] Grace period intercept success! Ignoring bot detection.`);
+            matchedMarkers = [];
+            networkSucceeded = true;
+          }
         }
 
         if (matchedMarkers.length > 0) {
@@ -764,17 +886,28 @@ async function startServer() {
           };
         }
 
-        // If we survived the block logic, NOW wait for the network interceptor if applicable!
-        if (interceptedResponsePromise) {
-          console.log(`[NETWORK CAPTURE] Awaiting background intercept response...`);
-          const interceptedResponse = await interceptedResponsePromise;
-          if (interceptedResponse) {
-            try {
-              primaryNetworkJson = await interceptedResponse.json();
-              primaryNetworkMatchedUrl = interceptedResponse.url();
-              console.log(`[NETWORK CAPTURE] Successfully evaluated and saved intercept response.`);
-            } catch (e) {
-              console.warn(`[NETWORK CAPTURE] Failed to parse intercepted JSON: ${e}`);
+        // Final check if not found during didSolve polling
+        if (capture?.primarySource === 'network' && !primaryNetworkJson) {
+          const matched = interceptedJson.find(ij => ij.url.includes(capture.network.urlIncludes!));
+          if (matched) {
+            primaryNetworkJson = matched.data;
+            primaryNetworkMatchedUrl = matched.url;
+          } else {
+            // Fallback: If we missed the exact includes string, look for any JSON that looks like flight data
+            console.log(`[NETWORK CAPTURE] Exact match not found. Attempting heuristic fallback (excluding trackers)...`);
+            const heuristicMatch = interceptedJson.slice().reverse().find(ij => {
+              const url = ij.url.toLowerCase();
+              const isTracker = url.includes("clicktripz") || url.includes("google-analytics") || url.includes("px-cloud");
+              if (isTracker) return false;
+
+              return url.includes("flight") ||
+                url.includes("availability") ||
+                (ij.data && (ij.data.flights || ij.data.outboundFlights || ij.data.lowFareData));
+            });
+            if (heuristicMatch) {
+              primaryNetworkJson = heuristicMatch.data;
+              primaryNetworkMatchedUrl = heuristicMatch.url;
+              console.log(`[NETWORK CAPTURE] Heuristic match found: ${heuristicMatch.url}`);
             }
           }
         }
@@ -798,6 +931,8 @@ async function startServer() {
                 title,
                 statusHint: "timeout",
                 detectedMarkers: [],
+                interceptedUrls: interceptedJson.map(i => i.url),
+                allUrls: page.frames().flatMap(f => f.url()),
                 screenshotBase64,
                 htmlSnippet: content.substring(0, 3000)
               }
