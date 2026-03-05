@@ -592,68 +592,136 @@ async function startServer() {
         };
 
         // Helper to solve "Press and Hold" if detected
-        // Helper to solve "Press and Hold" if detected
         const solvePressAndHold = async () => {
-          const pressAndHoldSelectors = [
+          const captchaSelectors = [
             "#px-captcha",
-            "div[class*='captcha']",
-            "iframe[src*='captcha']",
-            "div[id*='captcha']",
-            "button[id*='press']",
+            "div[id*='px-captcha']",
             ".px-captcha-container",
-            "div[aria-label*='Press and Hold']",
-            "#challenge-stage",
-            ".ctp-checkbox-label",
-            "text='Access to this page has been denied'"
           ];
 
-          // Poll periodically for up to 15 seconds waiting for the CAPTCHA to appear
+          // Poll for CAPTCHA to appear (up to 15 seconds)
+          let captchaElement: any = null;
+          let captchaFrame: any = null;
+
           for (let attempt = 0; attempt < 15; attempt++) {
-            const frames = page.frames();
-
-            for (const frame of frames) {
-              for (const selector of pressAndHoldSelectors) {
+            for (const frame of page.frames()) {
+              for (const selector of captchaSelectors) {
                 try {
-                  const element = await frame.$(selector);
-                  if (element && await element.isVisible()) {
-                    console.log(`[STEALTH] Detected potential Challenge in frame: ${selector}`);
-
-                    // Wait for the iframe's internal JS to fully initialize and attach its event listeners before clicking
-                    await page.waitForTimeout(3000);
-
-                    // native Playwright boundingBox inside an iframe already returns main-frame relative coords
-                    const box = await element.boundingBox();
-                    if (box) {
-                      const x = box.x + box.width / 2 + (Math.random() * 20 - 10);
-                      const y = box.y + box.height / 2 + (Math.random() * 20 - 10);
-
-                      // Move mouse naturally
-                      await moveMouseHumanLike(x, y);
-                      await page.mouse.down();
-
-                      // Hold with "jitter" and "wiggle" to spoof human biometrics
-                      const holdDuration = 6000 + Math.random() * 4000;
-                      const intervals = 15;
-                      for (let i = 0; i < intervals; i++) {
-                        await page.waitForTimeout(holdDuration / intervals);
-                        // jiggle 1-2 pixels
-                        await page.mouse.move(x + (Math.random() * 4 - 2), y + (Math.random() * 4 - 2));
-                      }
-
-                      await page.mouse.up();
-                      console.log(`[STEALTH] Solved ${selector}, waiting for validation...`);
-                      await page.waitForTimeout(8000);
-                      return true;
-                    }
+                  const el = await frame.$(selector);
+                  if (el && await el.isVisible()) {
+                    captchaElement = el;
+                    captchaFrame = frame;
+                    console.log(`[STEALTH] Detected CAPTCHA element: ${selector}`);
+                    break;
                   }
-                } catch (e) {
-                  // Ignore frame-specific errors
-                }
+                } catch (e) { }
               }
+              if (captchaElement) break;
             }
-            // Wait 1 second before checking again
+            if (captchaElement) break;
             await page.waitForTimeout(1000);
           }
+
+          if (!captchaElement) {
+            // Also check for "Press & Hold" text as a fallback
+            const bodyText = await page.evaluate(() => document.body?.innerText || "");
+            if (bodyText.includes("Press & Hold") || bodyText.includes("Press and Hold")) {
+              console.log(`[STEALTH] Found "Press & Hold" text but no selector match. Trying text-based locate...`);
+              try {
+                captchaElement = await page.$('#px-captcha');
+                captchaFrame = page;
+              } catch (e) { }
+            }
+          }
+
+          if (!captchaElement) {
+            console.log(`[STEALTH] No CAPTCHA detected.`);
+            return false;
+          }
+
+          // Wait for PerimeterX JS to fully initialize the button
+          await page.waitForTimeout(3000 + Math.random() * 2000);
+
+          // Get CDP session for raw input dispatch
+          const cdpSession = await page.context().newCDPSession(page);
+
+          // Try up to 2 times to solve
+          for (let solveAttempt = 0; solveAttempt < 2; solveAttempt++) {
+            const box = await captchaElement.boundingBox();
+            if (!box) {
+              console.warn(`[STEALTH] Could not get bounding box for CAPTCHA element.`);
+              return false;
+            }
+
+            const x = box.x + box.width / 2 + (Math.random() * 10 - 5);
+            const y = box.y + box.height / 2 + (Math.random() * 10 - 5);
+
+            console.log(`[STEALTH] Attempting press-and-hold at (${x.toFixed(0)}, ${y.toFixed(0)}), attempt ${solveAttempt + 1}...`);
+
+            // Move mouse to the button naturally
+            await moveMouseHumanLike(x, y);
+            await page.waitForTimeout(200 + Math.random() * 300);
+
+            // Press down using CDP for authentic events
+            await cdpSession.send('Input.dispatchMouseEvent', {
+              type: 'mousePressed',
+              x: Math.round(x),
+              y: Math.round(y),
+              button: 'left',
+              clickCount: 1,
+            });
+
+            // Hold for 10-16 seconds with subtle jitter
+            const holdDuration = 10000 + Math.random() * 6000;
+            const jitterSteps = 20 + Math.floor(Math.random() * 10);
+            const stepDelay = holdDuration / jitterSteps;
+
+            for (let i = 0; i < jitterSteps; i++) {
+              await page.waitForTimeout(stepDelay);
+              // Subtle 1-3 pixel jitter
+              const jitterX = x + (Math.random() * 6 - 3);
+              const jitterY = y + (Math.random() * 6 - 3);
+              await cdpSession.send('Input.dispatchMouseEvent', {
+                type: 'mouseMoved',
+                x: Math.round(jitterX),
+                y: Math.round(jitterY),
+                button: 'left',
+              });
+            }
+
+            // Release
+            await cdpSession.send('Input.dispatchMouseEvent', {
+              type: 'mouseReleased',
+              x: Math.round(x),
+              y: Math.round(y),
+              button: 'left',
+              clickCount: 1,
+            });
+
+            console.log(`[STEALTH] Released press-and-hold after ${(holdDuration / 1000).toFixed(1)}s. Waiting for validation...`);
+
+            // Wait for validation and check if CAPTCHA disappeared
+            await page.waitForTimeout(5000);
+
+            // Check if solved
+            const isStillVisible = await captchaElement.isVisible().catch(() => false);
+            const bodyText = await page.evaluate(() => document.body?.innerText || "");
+            const captchaGone = !isStillVisible ||
+              !bodyText.includes("Press & Hold") && !bodyText.includes("Press and Hold");
+
+            if (captchaGone) {
+              console.log(`[STEALTH] CAPTCHA appears solved on attempt ${solveAttempt + 1}!`);
+              await page.waitForTimeout(3000);
+              await cdpSession.detach();
+              return true;
+            }
+
+            console.warn(`[STEALTH] CAPTCHA still visible after attempt ${solveAttempt + 1}. Retrying...`);
+            await page.waitForTimeout(2000);
+          }
+
+          await cdpSession.detach();
+          console.warn(`[STEALTH] Failed to solve CAPTCHA after 2 attempts.`);
           return false;
         };
 
@@ -752,21 +820,31 @@ async function startServer() {
           console.warn(`[STEALTH] solvePressAndHold skipped: ${e.message}`);
         }
 
-        // If we actively solved a captcha, wait briefly to allow the page to visibly navigate to the target data state.
+        // If we actively solved a captcha, wait for PerimeterX to auto-redirect us to the results page.
         if (didSolve) {
-          console.log(`[STEALTH] Captcha solved. Navigating fresh to original URL to trigger flight data request...`);
-          await page.mouse.move(100 + Math.random() * 100, 100 + Math.random() * 100);
-          await page.waitForTimeout(2000);
+          console.log(`[STEALTH] Captcha solved. Waiting for PerimeterX auto-redirect...`);
 
-          // Navigate fresh so the SPA re-fires the flight data POST request from scratch
-          await page.goto(targetUrl, {
-            waitUntil: 'domcontentloaded',
-            timeout: 60000,
-          }).catch((e: any) => {
-            console.warn(`[STEALTH] Fresh nav after solve had navigation error: ${e.message}`);
+          // PerimeterX auto-redirects after validation. Wait for navigation to complete.
+          await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {
+            console.log(`[STEALTH] No auto-navigation detected, checking page state...`);
           });
 
-          console.log(`[STEALTH] Fresh nav complete. Current URL: ${page.url()}`);
+          console.log(`[STEALTH] Post-solve URL: ${page.url()}`);
+
+          // Check if we got another CAPTCHA on the redirected page
+          let secondSolve = false;
+          try {
+            const secondCaptcha = await page.$('#px-captcha');
+            if (secondCaptcha && await secondCaptcha.isVisible()) {
+              console.log(`[STEALTH] Second CAPTCHA detected after redirect. Solving again...`);
+              secondSolve = await solvePressAndHold();
+              if (secondSolve) {
+                await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => { });
+                console.log(`[STEALTH] Post-second-solve URL: ${page.url()}`);
+              }
+            }
+          } catch (e) { }
+
           await waitForLoadingBear();
           console.log(`[STEALTH] Loading finished, waiting for final intercept stabilization...`);
 
