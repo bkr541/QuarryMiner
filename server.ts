@@ -473,7 +473,7 @@ async function startServer() {
         const userAgent = new UserAgents({ deviceCategory: "desktop" }).toString();
 
         browser = await chromium.launch({
-          headless: false,
+          headless: true,
           args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
@@ -514,28 +514,24 @@ async function startServer() {
 
         if (actualFormats.includes("json") || capture?.primarySource === 'network') {
           page.on('response', async (response) => {
-            const url = response.url();
             const contentType = response.headers()['content-type'] || '';
-            const isFrontier = url.includes('flyfrontier.com');
-
-            if (isFrontier || contentType.includes('application/json')) {
-              console.log(`[NETWORK CAPTURE] Observed: [${response.status()}] ${url.substring(0, 120)} (${contentType})`);
-            }
-
             if (contentType.includes('application/json')) {
               try {
                 const json = await response.json();
-                interceptedJson.push({ url, data: json });
+                interceptedJson.push({ url: response.url(), data: json });
 
-                // If we survived the block logic...
+                // If this is our targeted primary network interception point
                 if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
-                  if (url.includes(capture.network.urlIncludes)) {
+                  if (response.url().includes(capture.network.urlIncludes)) {
                     primaryNetworkJson = json;
-                    primaryNetworkMatchedUrl = url;
-                    console.log(`[NETWORK CAPTURE] Successfully intercepted target URL: ${url}`);
+                    primaryNetworkMatchedUrl = response.url();
+                    console.log(`[NETWORK CAPTURE] Successfully intercepted target URL: ${response.url()}`);
                   }
                 }
-              } catch (e) { }
+
+              } catch (e) {
+                // Ignore errors (e.g. 204 No Content)
+              }
             }
           });
         }
@@ -593,194 +589,49 @@ async function startServer() {
 
         // Helper to solve "Press and Hold" if detected
         const solvePressAndHold = async () => {
-          const captchaSelectors = [
+          const pressAndHoldSelectors = [
             "#px-captcha",
-            "div[id*='px-captcha']",
+            "div[class*='captcha']",
+            "iframe[src*='captcha']",
+            "div[id*='captcha']",
+            "button[id*='press']",
             ".px-captcha-container",
+            "div[aria-label*='Press and Hold']"
           ];
 
-          // Poll for CAPTCHA to appear (up to 15 seconds)
-          let captchaElement: any = null;
-          let captchaFrame: any = null;
+          for (const selector of pressAndHoldSelectors) {
+            try {
+              const element = await page.$(selector);
+              if (element && await element.isVisible()) {
+                console.log(`[STEALTH] Detected potential Challenge: ${selector}`);
 
-          for (let attempt = 0; attempt < 15; attempt++) {
-            for (const frame of page.frames()) {
-              for (const selector of captchaSelectors) {
-                try {
-                  const el = await frame.$(selector);
-                  if (el && await el.isVisible()) {
-                    captchaElement = el;
-                    captchaFrame = frame;
-                    console.log(`[STEALTH] Detected CAPTCHA element: ${selector}`);
-                    break;
+                const box = await element.boundingBox();
+                if (box) {
+                  const x = box.x + box.width / 2 + (Math.random() * 20 - 10);
+                  const y = box.y + box.height / 2 + (Math.random() * 20 - 10);
+
+                  await moveMouseHumanLike(x, y);
+                  await page.mouse.down();
+
+                  // Hold with "jitter" and "wiggle"
+                  const holdDuration = 5000 + Math.random() * 3000;
+                  const intervals = 10;
+                  for (let i = 0; i < intervals; i++) {
+                    await page.waitForTimeout(holdDuration / intervals);
+                    await page.mouse.move(x + (Math.random() * 4 - 2), y + (Math.random() * 4 - 2));
                   }
-                } catch (e) { }
-              }
-              if (captchaElement) break;
-            }
-            if (captchaElement) break;
-            await page.waitForTimeout(1000);
-          }
 
-          if (!captchaElement) {
-            // Also check for "Press & Hold" text as a fallback
-            const bodyText = await page.evaluate(() => document.body?.innerText || "");
-            if (bodyText.includes("Press & Hold") || bodyText.includes("Press and Hold")) {
-              console.log(`[STEALTH] Found "Press & Hold" text but no selector match. Trying text-based locate...`);
-              try {
-                captchaElement = await page.$('#px-captcha');
-                captchaFrame = page;
-              } catch (e) { }
-            }
-          }
-
-          if (!captchaElement) {
-            console.log(`[STEALTH] No CAPTCHA detected.`);
-            return false;
-          }
-
-          // Wait for PerimeterX JS to fully initialize the button
-          await page.waitForTimeout(3000 + Math.random() * 2000);
-
-          // Get CDP session for raw input dispatch
-          const cdpSession = await page.context().newCDPSession(page);
-
-          // Try up to 2 times to solve
-          for (let solveAttempt = 0; solveAttempt < 2; solveAttempt++) {
-            const box = await captchaElement.boundingBox();
-            if (!box) {
-              console.warn(`[STEALTH] Could not get bounding box for CAPTCHA element.`);
-              return false;
-            }
-
-            const x = box.x + box.width / 2 + (Math.random() * 10 - 5);
-            const y = box.y + box.height / 2 + (Math.random() * 10 - 5);
-
-            console.log(`[STEALTH] Attempting press-and-hold at (${x.toFixed(0)}, ${y.toFixed(0)}), attempt ${solveAttempt + 1}...`);
-
-            // Move mouse to the button naturally
-            await moveMouseHumanLike(x, y);
-            await page.waitForTimeout(200 + Math.random() * 300);
-
-            // Press down using CDP for authentic events
-            await cdpSession.send('Input.dispatchMouseEvent', {
-              type: 'mousePressed',
-              x: Math.round(x),
-              y: Math.round(y),
-              button: 'left',
-              clickCount: 1,
-            });
-
-            // Hold for 10-16 seconds with subtle jitter
-            const holdDuration = 10000 + Math.random() * 6000;
-            const jitterSteps = 20 + Math.floor(Math.random() * 10);
-            const stepDelay = holdDuration / jitterSteps;
-
-            for (let i = 0; i < jitterSteps; i++) {
-              await page.waitForTimeout(stepDelay);
-              // Subtle 1-3 pixel jitter
-              const jitterX = x + (Math.random() * 6 - 3);
-              const jitterY = y + (Math.random() * 6 - 3);
-              await cdpSession.send('Input.dispatchMouseEvent', {
-                type: 'mouseMoved',
-                x: Math.round(jitterX),
-                y: Math.round(jitterY),
-                button: 'left',
-              });
-            }
-
-            // Release
-            await cdpSession.send('Input.dispatchMouseEvent', {
-              type: 'mouseReleased',
-              x: Math.round(x),
-              y: Math.round(y),
-              button: 'left',
-              clickCount: 1,
-            });
-
-            console.log(`[STEALTH] Released press-and-hold after ${(holdDuration / 1000).toFixed(1)}s. Waiting for validation...`);
-
-            // Wait for validation and check if CAPTCHA disappeared
-            await page.waitForTimeout(5000);
-
-            // Check if solved
-            const isStillVisible = await captchaElement.isVisible().catch(() => false);
-            const bodyText = await page.evaluate(() => document.body?.innerText || "");
-            const captchaGone = !isStillVisible ||
-              !bodyText.includes("Press & Hold") && !bodyText.includes("Press and Hold");
-
-            if (captchaGone) {
-              console.log(`[STEALTH] CAPTCHA appears solved on attempt ${solveAttempt + 1}!`);
-              await page.waitForTimeout(3000);
-              await cdpSession.detach();
-              return true;
-            }
-
-            console.warn(`[STEALTH] CAPTCHA still visible after attempt ${solveAttempt + 1}. Retrying...`);
-            await page.waitForTimeout(2000);
-          }
-
-          await cdpSession.detach();
-          console.warn(`[STEALTH] Failed to solve CAPTCHA after 2 attempts.`);
-          return false;
-        };
-
-        const waitForLoadingBear = async (depth = 0) => {
-          if (depth > 2) return; // Prevent infinite refresh loops
-
-          const loadingPatterns = [
-            ".loading-image", // Frontier's bear
-            ".loading-spinner",
-            ".spinner",
-            "div[class*='Loading']",
-            "img[src*='loading']",
-            "img[src*='bear']",
-            "svg[class*='Loading']",
-            ".loading-icon"
-          ];
-
-          console.log(`[STEALTH] Checking for loading indicators (depth ${depth})...`);
-          for (let i = 0; i < 40; i++) { // Poll for up to 60 seconds
-            let foundLoading = false;
-            for (const selector of loadingPatterns) {
-              const elements = await page.$$(selector);
-              for (const el of elements) {
-                if (await el.isVisible()) {
-                  foundLoading = true;
-                  break;
+                  await page.mouse.up();
+                  console.log(`[STEALTH] Solved ${selector}, waiting for validation...`);
+                  await page.waitForTimeout(7000);
+                  return true;
                 }
               }
-              if (foundLoading) break;
+            } catch (e) {
+              // Ignore
             }
-
-            if (!foundLoading) {
-              // Also check for specific innerText patterns that imply loading
-              const bodyText = await page.evaluate(() => document.body ? document.body.innerText : "");
-              if (bodyText.includes("Finding the best fares") || bodyText.includes("Loading your results") || bodyText.includes("Just a moment")) {
-                foundLoading = true;
-              }
-            }
-
-            if (!foundLoading) {
-              console.log(`[STEALTH] No loading indicators found (at step ${i}).`);
-
-              const title = await page.title().catch(() => "");
-              const bodyText = await page.evaluate(() => document.body ? document.body.innerText : "");
-              if (title.includes("Access Denied") || (bodyText.length < 2000 && bodyText.includes("Access to this page has been denied"))) {
-                console.warn(`[STEALTH] Still on Access Denied page after "solve". Refreshing...`);
-                await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => { });
-                await page.waitForTimeout(5000);
-                return await waitForLoadingBear(depth + 1);
-              }
-
-              if (i > 0) await page.waitForTimeout(3000); // Small buffer after it disappears
-              return;
-            }
-
-            console.log(`[STEALTH] Loading screen active, waiting...`);
-            await page.waitForTimeout(1500);
           }
-          console.log(`[STEALTH] Loading indicator polling finished.`);
+          return false;
         };
 
         // Random delay to simulate human behavior
@@ -793,15 +644,17 @@ async function startServer() {
         let interceptedResponsePromise: Promise<any> | null = null;
 
         if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
-          console.log(`[NETWORK CAPTURE] Monitoring all responses for: ${capture.network.urlIncludes}`);
-          // We won't use a strict background promise here anymore because 
-          // Frontier's long loading cycles can cause them to expire or miss the trigger.
-          // Instead, we will rely on checking the interceptedJson array periodically.
+          console.log(`[NETWORK CAPTURE] Setting up waitForResponse for: ${capture.network.urlIncludes}`);
+          // Fire explicitly in background
+          interceptedResponsePromise = page.waitForResponse(res => res.url().includes(capture.network.urlIncludes!) && res.status() >= 200 && res.status() <= 299, { timeout: 45000 }).catch(e => {
+            console.warn(`[NETWORK CAPTURE] Failed to intercept URL within timeout: ${e.message}`);
+            return null;
+          });
         }
 
         response = await page.goto(targetUrl, {
           waitUntil: "commit",
-          timeout: 60000
+          timeout: 45000
         }).catch(e => {
           pageError = e.message;
           return null;
@@ -813,73 +666,15 @@ async function startServer() {
           console.warn(`[BLOCK] Received ${response.status()} status code. Attempting in-place solve...`);
         }
 
-        let didSolve = false;
         try {
-          didSolve = await solvePressAndHold();
+          await solvePressAndHold();
         } catch (e: any) {
           console.warn(`[STEALTH] solvePressAndHold skipped: ${e.message}`);
         }
 
-        // If we actively solved a captcha, wait for PerimeterX to auto-redirect us to the results page.
-        if (didSolve) {
-          console.log(`[STEALTH] Captcha solved. Waiting for PerimeterX auto-redirect...`);
-
-          // PerimeterX auto-redirects after validation. Wait for navigation to complete.
-          await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {
-            console.log(`[STEALTH] No auto-navigation detected, checking page state...`);
-          });
-
-          console.log(`[STEALTH] Post-solve URL: ${page.url()}`);
-
-          // Check if we got another CAPTCHA on the redirected page
-          let secondSolve = false;
-          try {
-            const secondCaptcha = await page.$('#px-captcha');
-            if (secondCaptcha && await secondCaptcha.isVisible()) {
-              console.log(`[STEALTH] Second CAPTCHA detected after redirect. Solving again...`);
-              secondSolve = await solvePressAndHold();
-              if (secondSolve) {
-                await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => { });
-                console.log(`[STEALTH] Post-second-solve URL: ${page.url()}`);
-              }
-            }
-          } catch (e) { }
-
-          await waitForLoadingBear();
-          console.log(`[STEALTH] Loading finished, waiting for final intercept stabilization...`);
-
-          // Poll the interceptedJson array for the target request for up to 45s after loading finishes
-          if (capture?.primarySource === 'network' && capture?.network?.urlIncludes) {
-            console.log(`[NETWORK CAPTURE] Actively polling for target JSON...`);
-            for (let i = 0; i < 45; i++) {
-              const matched = interceptedJson.find(ij => ij.url.includes(capture.network.urlIncludes!));
-              if (matched) {
-                primaryNetworkJson = matched.data;
-                primaryNetworkMatchedUrl = matched.url;
-                console.log(`[NETWORK CAPTURE] Found target JSON via polling at step ${i}`);
-                break;
-              }
-              // Secondary check for the loading indicators in case they reappear
-              const bodyText = await page.evaluate(() => document.body ? document.body.innerText : "");
-              if (bodyText.includes("Finding the best fares")) {
-                console.log(`[STEALTH] Still seeing "Finding the best fares" text...`);
-              }
-              await page.waitForTimeout(1000);
-            }
-          }
-
-          if (!primaryNetworkJson) {
-            await page.waitForTimeout(5000); // Final cooldown if still not found
-          }
-        }
-
         let content = "";
-        let bodyText = "";
         try {
-          // Wait for body to at least exist
-          await page.waitForSelector('body', { timeout: 10000 }).catch(() => { });
           content = await page.content();
-          bodyText = await page.evaluate(() => document.body ? document.body.innerText : "");
         } catch (e: any) {
           pageError = pageError || e.message;
           console.warn(`[STEALTH] Failed to read page.content(): ${e.message}`);
@@ -889,6 +684,7 @@ async function startServer() {
 
         const blockPatterns = [
           "Access to this page has been denied",
+          "px-captcha",
           "Verify you are human",
           "Cloudflare",
           "unusual activity from your computer network",
@@ -900,37 +696,16 @@ async function startServer() {
           "Access Denied"
         ];
 
-        let matchedMarkers = blockPatterns.filter(pattern => {
-          // If we solved a captcha, ignore "Access to this page has been denied" unless it's the ONLY thing on screen
-          if (didSolve && (pattern === "Access to this page has been denied" || pattern === "Access Denied")) {
-            // Only count as a block if the body text is REALLY short (just the error message)
-            return bodyText.length < 500 && bodyText.includes(pattern);
-          }
-          return bodyText.includes(pattern) || title.includes(pattern);
-        });
+        let matchedMarkers = blockPatterns.filter(pattern => content.includes(pattern) || title.includes(pattern));
 
         if (pageError && (pageError.includes("ERR_ABORTED") || pageError.includes("403"))) {
           matchedMarkers.push("ERR_ABORTED/403");
         }
 
-        // Only append the HTTP status if the text markers ALSO triggered AND we didn't solve a captcha.
-        if (!didSolve && response && (response.status() === 403 || response.status() === 429) && matchedMarkers.length > 0) {
+        // Only append the HTTP status if the text markers ALSO triggered.
+        // Otherwise, successful bypassed solves will incorrectly trip a failure since 'response' points to the initial 403 load!
+        if (response && (response.status() === 403 || response.status() === 429) && matchedMarkers.length > 0) {
           matchedMarkers.push(`HTTP ${response.status()}`);
-        }
-
-        // If there's a network interceptor running, and we think we might be blocked, 
-        // give the interceptor a more generous grace period (20s) if we solve a captcha.
-        let networkSucceeded = false;
-        if (matchedMarkers.length > 0 && interceptedResponsePromise) {
-          const graceMs = didSolve ? 20000 : 10000;
-          console.log(`[STEALTH] Bot markers detected but network interceptor is active. Giving it ${graceMs / 1000}s grace period...`);
-          const gracePeriod = new Promise(resolve => setTimeout(() => resolve(null), graceMs));
-          const fastIntercept: any = await Promise.race([interceptedResponsePromise, gracePeriod]);
-          if (fastIntercept) {
-            console.log(`[STEALTH] Grace period intercept success! Ignoring bot detection.`);
-            matchedMarkers = [];
-            networkSucceeded = true;
-          }
         }
 
         if (matchedMarkers.length > 0) {
@@ -964,28 +739,17 @@ async function startServer() {
           };
         }
 
-        // Final check if not found during didSolve polling
-        if (capture?.primarySource === 'network' && !primaryNetworkJson) {
-          const matched = interceptedJson.find(ij => ij.url.includes(capture.network.urlIncludes!));
-          if (matched) {
-            primaryNetworkJson = matched.data;
-            primaryNetworkMatchedUrl = matched.url;
-          } else {
-            // Fallback: If we missed the exact includes string, look for any JSON that looks like flight data
-            console.log(`[NETWORK CAPTURE] Exact match not found. Attempting heuristic fallback (excluding trackers)...`);
-            const heuristicMatch = interceptedJson.slice().reverse().find(ij => {
-              const url = ij.url.toLowerCase();
-              const isTracker = url.includes("clicktripz") || url.includes("google-analytics") || url.includes("px-cloud");
-              if (isTracker) return false;
-
-              return url.includes("flight") ||
-                url.includes("availability") ||
-                (ij.data && (ij.data.flights || ij.data.outboundFlights || ij.data.lowFareData));
-            });
-            if (heuristicMatch) {
-              primaryNetworkJson = heuristicMatch.data;
-              primaryNetworkMatchedUrl = heuristicMatch.url;
-              console.log(`[NETWORK CAPTURE] Heuristic match found: ${heuristicMatch.url}`);
+        // If we survived the block logic, NOW wait for the network interceptor if applicable!
+        if (interceptedResponsePromise) {
+          console.log(`[NETWORK CAPTURE] Awaiting background intercept response...`);
+          const interceptedResponse = await interceptedResponsePromise;
+          if (interceptedResponse) {
+            try {
+              primaryNetworkJson = await interceptedResponse.json();
+              primaryNetworkMatchedUrl = interceptedResponse.url();
+              console.log(`[NETWORK CAPTURE] Successfully evaluated and saved intercept response.`);
+            } catch (e) {
+              console.warn(`[NETWORK CAPTURE] Failed to parse intercepted JSON: ${e}`);
             }
           }
         }
@@ -1009,8 +773,6 @@ async function startServer() {
                 title,
                 statusHint: "timeout",
                 detectedMarkers: [],
-                interceptedUrls: interceptedJson.map(i => i.url),
-                allUrls: page.frames().flatMap(f => f.url()),
                 screenshotBase64,
                 htmlSnippet: content.substring(0, 3000)
               }
